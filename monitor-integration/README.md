@@ -23,7 +23,27 @@ curl -X POST http://localhost:8080/api/v1/provision/import-openapi \
 # {"openapiUrl":"https://svc/v3/api-docs","dryRun":true}
 ```
 
-> 后续阶段（5）：告警 Webhook 归档、企业微信应用消息(精准@人)+邮件通知、查询/报表 API。
+### 阶段 5：告警归档 + 企业微信应用消息(精准@人) + 邮件 + 查询/统计
+
+- **告警 Webhook**：`POST /api/v1/webhook/hertzbeat`（请求头 `X-Webhook-Token` 校验）。解析 HertzBeat
+  `GroupAlert`（Alertmanager 风格 payload），按 `instancename` 关联本地 `monitor_ref` 补充服务/URL/等级，
+  按 fingerprint 维护 firing/recovered 状态机与持续时长，异常也返回 200 避免重推。
+- **通知网关**：按 `service_owner`（服务→负责人映射）路由，发企业微信**应用消息(textcard 精准@人)** + 邮件，
+  access_token 经 Redis 缓存（失败回退内存），邮件失败指数退避重试，全部写 `notify_log` 回执。
+- **查询/统计**：`GET /api/v1/alerts`（分页/过滤）、`GET /api/v1/alerts/{id}`（含通知回执）、
+  `GET /api/v1/stats/overview`（当前 firing/今日告警/按服务分布）。
+- **服务负责人映射**：`GET/POST /api/v1/service-owners`、`DELETE /api/v1/service-owners/{id}`。
+
+```bash
+# 在 HertzBeat 配置 Webhook 通知，URL 指向：
+#   http://<integration-host>:8080/api/v1/webhook/hertzbeat
+#   并在请求头加 X-Webhook-Token: <WEBHOOK_TOKEN>
+# 配置服务负责人（精准@人 + 邮件）
+curl -X POST http://localhost:8080/api/v1/service-owners -H 'Content-Type: application/json' \
+  -d '{"serviceName":"order-service","wecomUserids":"zhangsan,lisi","emailList":"ops@company.com"}'
+```
+
+> 后续阶段（6）：一体化 docker-compose 联调、单元测试、自检清单。
 
 ## 本地运行
 

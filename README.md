@@ -23,7 +23,8 @@
 | HertzBeat 部署（引擎 + MySQL + VictoriaMetrics）| `deploy/hertzbeat/` | ✅ 阶段0 完成，已实测启动 |
 | Java 集成层骨架（Spring Boot）| `monitor-integration/` | ✅ 阶段3 脚手架完成（HertzBeat 客户端、健康检查、Flyway 建表），已实测连通 |
 | OpenAPI 自动导入 / 批量纳管 | `monitor-integration/` | ✅ 阶段4 完成，已实测（OpenAPI 解析、dryRun 预览、幂等创建/更新到 HertzBeat）|
-| 告警归档 + 企业微信应用消息(精准@人) + 邮件 | `monitor-integration/` | ⏳ 阶段5（待开发）|
+| 告警归档 + 企业微信应用消息(精准@人) + 邮件 | `monitor-integration/` | ✅ 阶段5 完成，已实测（Webhook 归档、firing/recovered 状态机、通知路由与回执、查询/统计 API）|
+| 一体化部署联调 + 单测 | 全栈 | ⏳ 阶段6（待开发）|
 
 > MVP 已确定包含：**OpenAPI 自动导入、VictoriaMetrics 时序库、企业微信应用消息精准@人**。
 > 详见 `docs/06-MVP开发提示词.md`。本地实测：HertzBeat 启动正常、API 登录可用、MySQL 自动建表、
