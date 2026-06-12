@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | HertzBeat 部署（引擎 + MySQL + VictoriaMetrics）| `deploy/hertzbeat/` | ✅ 阶段0 完成，已实测启动 |
 | Java 集成层骨架（Spring Boot）| `monitor-integration/` | ✅ 阶段3 脚手架完成（HertzBeat 客户端、健康检查、Flyway 建表），已实测连通 |
-| OpenAPI 自动导入 / 批量纳管 | `monitor-integration/` | ⏳ 阶段4（待开发）|
+| OpenAPI 自动导入 / 批量纳管 | `monitor-integration/` | ✅ 阶段4 完成，已实测（OpenAPI 解析、dryRun 预览、幂等创建/更新到 HertzBeat）|
 | 告警归档 + 企业微信应用消息(精准@人) + 邮件 | `monitor-integration/` | ⏳ 阶段5（待开发）|
 
 > MVP 已确定包含：**OpenAPI 自动导入、VictoriaMetrics 时序库、企业微信应用消息精准@人**。
