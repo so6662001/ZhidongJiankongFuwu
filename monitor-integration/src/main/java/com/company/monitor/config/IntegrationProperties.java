@@ -52,4 +52,11 @@ public class IntegrationProperties {
 
     /** 升级通知额外接收人：邮件（逗号分隔） */
     private String escalateEmailList;
+
+    /**
+     * SSO 可信身份请求头（如 X-Auth-User），由前置 SSO 网关注入。
+     * 配置后，携带该非空头的请求视为已认证（与 API Key 二选一通过）。
+     * 安全前提：网关必须强制 SSO 并剥离客户端伪造的同名头。
+     */
+    private String ssoTrustedHeader;
 }

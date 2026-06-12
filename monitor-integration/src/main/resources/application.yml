@@ -77,6 +77,8 @@ integration:
   escalate-scan-interval-ms: ${ESCALATE_SCAN_INTERVAL_MS:60000}
   escalate-wecom-userids: ${ESCALATE_WECOM_USERIDS:}
   escalate-email-list: ${ESCALATE_EMAIL_LIST:}
+  # SSO 网关可信身份头（如 X-Auth-User）；配置后携带该头即视为已认证
+  sso-trusted-header: ${SSO_TRUSTED_HEADER:}
 
 logging:
   level:

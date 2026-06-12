@@ -30,11 +30,13 @@ public class NotificationGateway {
     private final NotifyLogMapper notifyLogMapper;
     private final WeComProperties weComProperties;
     private final IntegrationProperties integrationProperties;
+    private final com.company.monitor.service.OncallService oncallService;
 
     public NotificationGateway(WeComAppClient weComAppClient, EmailNotifier emailNotifier,
                                TemplateRenderer renderer, ServiceOwnerMapper serviceOwnerMapper,
                                NotifyLogMapper notifyLogMapper, WeComProperties weComProperties,
-                               IntegrationProperties integrationProperties) {
+                               IntegrationProperties integrationProperties,
+                               com.company.monitor.service.OncallService oncallService) {
         this.weComAppClient = weComAppClient;
         this.emailNotifier = emailNotifier;
         this.renderer = renderer;
@@ -42,11 +44,25 @@ public class NotificationGateway {
         this.notifyLogMapper = notifyLogMapper;
         this.weComProperties = weComProperties;
         this.integrationProperties = integrationProperties;
+        this.oncallService = oncallService;
     }
 
     public void notify(Alert alert, boolean recovered) {
         ServiceOwner owner = findOwner(alert.getServiceName());
-        dispatch(alert, recovered, resolveWecomUserIds(owner), resolveEmails(owner), renderer.title(alert, recovered));
+        // 接收人 = 服务负责人 ∪ 当前当班值班人
+        List<String> wecom = union(resolveWecomUserIds(owner), oncallService.currentWecomUserIds(alert.getServiceName()));
+        List<String> emails = union(resolveEmails(owner), oncallService.currentEmails(alert.getServiceName()));
+        dispatch(alert, recovered, wecom, emails, renderer.title(alert, recovered));
+    }
+
+    private List<String> union(List<String> a, List<String> b) {
+        List<String> r = new java.util.ArrayList<>(a);
+        for (String x : b) {
+            if (!r.contains(x)) {
+                r.add(x);
+            }
+        }
+        return r;
     }
 
     /**

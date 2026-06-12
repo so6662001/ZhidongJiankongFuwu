@@ -30,13 +30,26 @@ public class AlertService {
     private final MonitorRefMapper monitorRefMapper;
     private final NotificationGateway notificationGateway;
     private final IntegrationProperties properties;
+    private final SilenceService silenceService;
 
     public AlertService(AlertMapper alertMapper, MonitorRefMapper monitorRefMapper,
-                        NotificationGateway notificationGateway, IntegrationProperties properties) {
+                        NotificationGateway notificationGateway, IntegrationProperties properties,
+                        SilenceService silenceService) {
         this.alertMapper = alertMapper;
         this.monitorRefMapper = monitorRefMapper;
         this.notificationGateway = notificationGateway;
         this.properties = properties;
+        this.silenceService = silenceService;
+    }
+
+    /** 维护窗口内静默：仍归档，但跳过通知。 */
+    private void notifyUnlessSilenced(Alert alert, boolean recovered) {
+        if (silenceService != null && silenceService.isSilenced(alert)) {
+            log.info("命中维护窗口，静默通知 alertId={} service={} monitor={}",
+                    alert.getId(), alert.getServiceName(), alert.getMonitorName());
+            return;
+        }
+        notificationGateway.notify(alert, recovered);
     }
 
     /**
@@ -90,7 +103,7 @@ public class AlertService {
                             existingFiring.getFirstSeen(), LocalDateTime.now()).getSeconds());
                 }
                 alertMapper.updateById(existingFiring);
-                notificationGateway.notify(existingFiring, true);
+                notifyUnlessSilenced(existingFiring, true);
                 log.info("告警恢复 fingerprint={}", fingerprint);
             } else {
                 log.info("收到恢复事件但无对应 firing 告警，忽略 fingerprint={}", fingerprint);
@@ -111,7 +124,7 @@ public class AlertService {
             if (shouldRenotify) {
                 existingFiring.setNotifyCount((existingFiring.getNotifyCount() == null ? 0 : existingFiring.getNotifyCount()) + 1);
                 alertMapper.updateById(existingFiring);
-                notificationGateway.notify(existingFiring, false);
+                notifyUnlessSilenced(existingFiring, false);
             }
         } else {
             Alert alert = new Alert();
@@ -134,7 +147,7 @@ public class AlertService {
             alert.setCreatedAt(LocalDateTime.now());
             alert.setNotifyCount(1);
             alertMapper.insert(alert);
-            notificationGateway.notify(alert, false);
+            notifyUnlessSilenced(alert, false);
             log.info("新增 firing 告警 id={} fingerprint={}", alert.getId(), fingerprint);
         }
     }

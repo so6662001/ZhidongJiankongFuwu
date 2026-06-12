@@ -47,20 +47,39 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String configured = properties.getApiKey();
+        String ssoHeader = properties.getSsoTrustedHeader();
+
+        // SSO 网关可信身份头：携带非空即视为已认证（网关需强制 SSO 并剥离伪造头）
+        if (ssoHeader != null && !ssoHeader.isBlank()) {
+            String user = request.getHeader(ssoHeader);
+            if (user != null && !user.isBlank()) {
+                chain.doFilter(request, response);
+                return;
+            }
+        }
+
         if (configured == null || configured.isBlank()) {
-            // 未配置：放行但告警（建议生产配置）
-            chain.doFilter(request, response);
+            if (ssoHeader == null || ssoHeader.isBlank()) {
+                // 未配置任何鉴权：放行但启动已告警
+                chain.doFilter(request, response);
+                return;
+            }
+            // 配了 SSO 头但请求未携带 → 拒绝
+            unauthorized(response, "missing SSO identity header");
             return;
         }
         String provided = request.getHeader(HEADER);
         if (provided == null || !constantTimeEquals(configured, provided)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write(objectMapper.writeValueAsString(
-                    Result.error(401, "missing or invalid X-Api-Key")));
+            unauthorized(response, "missing or invalid X-Api-Key");
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    private void unauthorized(HttpServletResponse response, String msg) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(Result.error(401, msg)));
     }
 
     private boolean constantTimeEquals(String a, String b) {

@@ -30,7 +30,7 @@ class AlertServiceTest {
         alertMapper = mock(AlertMapper.class);
         monitorRefMapper = mock(MonitorRefMapper.class);
         gateway = mock(NotificationGateway.class);
-        service = new AlertService(alertMapper, monitorRefMapper, gateway, new IntegrationProperties());
+        service = new AlertService(alertMapper, monitorRefMapper, gateway, new IntegrationProperties(), null);
         when(monitorRefMapper.selectOne(any())).thenReturn(null);
     }
 
