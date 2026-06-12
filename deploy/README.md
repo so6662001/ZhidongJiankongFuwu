@@ -46,6 +46,7 @@ docker compose logs -f monitor-integration
 | 项 | 地址 |
 | --- | --- |
 | HertzBeat 控制台 | http://localhost:1157 （admin/hertzbeat，首登改密） |
+| **监控大盘（前端）** | http://localhost:8080/ （概览/告警/SLA/监控项/负责人/导入/通知测试） |
 | 集成层 Swagger | http://localhost:8080/swagger-ui.html |
 | 集成层健康检查 | http://localhost:8080/health |
 | VictoriaMetrics | http://localhost:8428 |

@@ -1,0 +1,220 @@
+// API 监控大盘前端（纯原生，无构建依赖）
+const API = '/api/v1';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const state = { tab: 'overview', alertPage: 1, alertFilter: {}, monitorPage: 1, autoTimer: null };
+
+function apiKey() { return localStorage.getItem('apiKey') || ''; }
+function headers(json) {
+  const h = {};
+  const k = apiKey(); if (k) h['X-Api-Key'] = k;
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { headers: headers(opts.body != null), ...opts });
+  if (res.status === 401) throw new Error('401 未授权：请在右上角填写 X-Api-Key');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (data && data.code !== 0 && data.code !== undefined)) {
+    throw new Error((data && data.message) || ('HTTP ' + res.status));
+  }
+  return data.data;
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+function avClass(v) { return v >= 99.9 ? 'av-ok' : (v >= 99 ? 'av-warn' : 'av-crit'); }
+function sevBadge(s) { return `<span class="badge b-${esc(s || 'P2')}">${esc(s || '')}</span>`; }
+function statusBadge(s) { return `<span class="badge b-${esc(s)}">${esc(s)}</span>`; }
+
+// ---------- 概览 ----------
+async function loadOverview() {
+  try {
+    const ov = await api('/stats/overview');
+    $('#ov-firing').textContent = ov.firing;
+    $('#ov-today').textContent = ov.today;
+    const sla = await api('/stats/sla?hours=' + windowHours());
+    $('#ov-worst').textContent = (sla.worstAvailability ?? 100) + '%';
+    $('#ov-incident').textContent = sla.monitorCountWithIncident ?? 0;
+    // firing by service 分布
+    const maxv = Math.max(1, ...(ov.firingByService || []).map(x => +x.count || 0));
+    $('#ov-byservice').innerHTML = (ov.firingByService || []).length
+      ? ov.firingByService.map(x => `<div class="dist-row"><div class="name">${esc(x.serviceName || '(未分组)')}</div>
+         <div class="barwrap"><div class="bar"><span class="av-crit" style="width:${(+x.count / maxv * 100)}%"></span></div></div>
+         <div style="width:36px;text-align:right">${esc(x.count)}</div></div>`).join('')
+      : '<div class="empty">当前无 firing 告警</div>';
+    setTs();
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- 告警 ----------
+async function loadAlerts() {
+  try {
+    const f = state.alertFilter;
+    const qs = new URLSearchParams({ page: state.alertPage, size: 15 });
+    ['status', 'severity', 'serviceName'].forEach(k => { if (f[k]) qs.set(k, f[k]); });
+    const d = await api('/alerts?' + qs.toString());
+    const rows = (d.records || []).map(a => `<tr class="clickable" onclick="showAlert(${a.id})">
+      <td>${a.id}</td><td>${statusBadge(a.status)}</td><td>${sevBadge(a.severity)}</td>
+      <td>${esc(a.serviceName)}</td><td>${esc(a.monitorName)}</td>
+      <td>${esc((a.content || '').slice(0, 50))}</td>
+      <td>${a.escalated == 1 ? '⬆️已升级' : ''}</td></tr>`).join('');
+    $('#alertBody').innerHTML = rows || '<tr><td colspan="7" class="empty">暂无告警</td></tr>';
+    $('#alertPageInfo').textContent = `第 ${d.current || state.alertPage} / ${d.pages || 1} 页 · 共 ${d.total || 0} 条`;
+    $('#alertPrev').disabled = (d.current || 1) <= 1;
+    $('#alertNext').disabled = (d.current || 1) >= (d.pages || 1);
+    setTs();
+  } catch (e) { toast(e.message); }
+}
+async function showAlert(id) {
+  try {
+    const d = await api('/alerts/' + id);
+    const a = d.alert;
+    $('#drawerTitle').textContent = '告警 #' + a.id;
+    const kv = (k, v) => `<div class="kv"><div class="k">${k}</div><div>${v}</div></div>`;
+    const logs = (d.notifyLogs || []).map(l => `<div class="kv"><div class="k">${esc(l.channelType)}</div>
+      <div>${l.success == 1 ? '✅成功' : '❌失败'} → ${esc(l.receiver)} ${l.errorMsg ? '<span class="muted">(' + esc(l.errorMsg) + ')</span>' : ''}
+      <span class="muted">${esc(l.sentAt)}</span></div></div>`).join('') || '<div class="empty">无通知回执</div>';
+    $('#drawerBody').innerHTML =
+      kv('状态', statusBadge(a.status)) + kv('等级', sevBadge(a.severity)) +
+      kv('服务', esc(a.serviceName)) + kv('监控', esc(a.monitorName)) +
+      kv('接口', esc(a.url)) + kv('内容', esc(a.content)) +
+      kv('首次发现', esc(a.firstSeen)) + kv('最近', esc(a.lastSeen)) +
+      kv('恢复时间', esc(a.recoveredAt || '-')) + kv('持续(秒)', esc(a.durationSec ?? '-')) +
+      kv('通知次数', esc(a.notifyCount)) + kv('升级', a.escalated == 1 ? '是 @ ' + esc(a.escalatedAt) : '否') +
+      '<h2>通知回执</h2>' + logs;
+    $('#drawer').classList.add('open');
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- SLA ----------
+async function loadSla() {
+  try {
+    const sla = await api('/stats/sla?hours=' + windowHours() + (slaService() ? '&serviceName=' + encodeURIComponent(slaService()) : ''));
+    $('#slaSummary').innerHTML =
+      `<div class="card"><div class="num">${sla.worstAvailability}%</div><div class="label">最差可用率 (${sla.windowHours}h)</div></div>
+       <div class="card"><div class="num">${sla.monitorCountWithIncident}</div><div class="label">有故障的监控数</div></div>`;
+    $('#slaBody').innerHTML = (sla.monitors || []).length
+      ? sla.monitors.map(m => `<tr><td>${esc(m.monitorName)}</td>
+         <td style="width:220px"><div class="bar"><span class="${avClass(m.availability)}" style="width:${m.availability}%"></span></div></td>
+         <td>${m.availability}%</td><td>${m.downtimeSec}s</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty" style="color:#16a34a">窗口内无故障，可用率 100%</td></tr>';
+    setTs();
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- 监控项 ----------
+async function loadMonitors() {
+  try {
+    const kw = $('#monKeyword').value.trim();
+    const qs = new URLSearchParams({ page: state.monitorPage, size: 15 });
+    if (kw) qs.set('keyword', kw);
+    const d = await api('/monitors?' + qs.toString());
+    $('#monBody').innerHTML = (d.records || []).length
+      ? d.records.map(m => `<tr><td>${m.id}</td><td>${esc(m.name)}</td><td>${esc(m.serviceName)}</td>
+         <td>${sevBadge(m.severity)}</td><td>${esc(m.method)}</td><td>${esc(m.url)}</td>
+         <td>${m.hzbMonitorId ?? ''}</td></tr>`).join('')
+      : '<tr><td colspan="7" class="empty">暂无监控项，请到「导入」纳管</td></tr>';
+    $('#monPageInfo').textContent = `第 ${d.current || 1} / ${d.pages || 1} 页 · 共 ${d.total || 0} 条`;
+    $('#monPrev').disabled = (d.current || 1) <= 1;
+    $('#monNext').disabled = (d.current || 1) >= (d.pages || 1);
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- 服务负责人 ----------
+async function loadOwners() {
+  try {
+    const list = await api('/service-owners');
+    $('#ownerBody').innerHTML = (list || []).length
+      ? list.map(o => `<tr><td>${o.id}</td><td>${esc(o.serviceName)}</td><td>${esc(o.wecomUserids)}</td>
+         <td>${esc(o.emailList)}</td><td>${o.enabled == 1 ? '启用' : '停用'}</td>
+         <td><button class="btn-ghost" onclick="delOwner(${o.id})">删除</button></td></tr>`).join('')
+      : '<tr><td colspan="6" class="empty">暂无配置</td></tr>';
+  } catch (e) { toast(e.message); }
+}
+async function saveOwner() {
+  try {
+    await api('/service-owners', { method: 'POST', body: JSON.stringify({
+      serviceName: $('#ownSvc').value.trim(), wecomUserids: $('#ownWecom').value.trim(), emailList: $('#ownEmail').value.trim()
+    }) });
+    toast('已保存'); $('#ownSvc').value = $('#ownWecom').value = $('#ownEmail').value = ''; loadOwners();
+  } catch (e) { toast(e.message); }
+}
+async function delOwner(id) { try { await api('/service-owners/' + id, { method: 'DELETE' }); loadOwners(); } catch (e) { toast(e.message); } }
+
+// ---------- 导入 ----------
+async function doImport(dryRun) {
+  const body = { dryRun, severity: $('#impSev').value, serviceName: $('#impSvc').value.trim() || undefined,
+    collector: $('#impCollector').value.trim() || undefined };
+  const url = $('#impUrl').value.trim(); const content = $('#impContent').value.trim();
+  if (url) body.openapiUrl = url; else if (content) body.openapiContent = content;
+  else { toast('请填写 OpenAPI URL 或内容'); return; }
+  try {
+    const d = await api('/provision/import-openapi', { method: 'POST', body: JSON.stringify(body) });
+    $('#impResult').textContent = `created=${d.created} updated=${d.updated} failed=${d.failed} (dryRun=${d.dryRun})\n` +
+      (d.details || []).map(i => `[${i.action}] ${i.name}  ${i.url}${i.needsReview ? '  ⚠needsReview' : ''}${i.message ? '  ' + i.message : ''}`).join('\n');
+    if (!dryRun) toast('导入完成');
+  } catch (e) { $('#impResult').textContent = '错误: ' + e.message; }
+}
+
+// ---------- 通知测试 ----------
+async function doNotifyTest() {
+  const body = {};
+  const svc = $('#ntSvc').value.trim(), w = $('#ntWecom').value.trim(), e = $('#ntEmail').value.trim();
+  if (svc) body.serviceName = svc; if (w) body.wecomUserids = w; if (e) body.emails = e;
+  try {
+    const d = await api('/notify/test', { method: 'POST', body: JSON.stringify(body) });
+    $('#ntResult').textContent = '已触发: ' + JSON.stringify(d, null, 2);
+    toast('测试通知已发送');
+  } catch (err) { $('#ntResult').textContent = '错误: ' + err.message; }
+}
+
+// ---------- 通用 ----------
+function windowHours() { return $('#hours').value || 24; }
+function slaService() { return $('#slaSvc').value.trim(); }
+function setTs() { $('#ts').textContent = '更新于 ' + new Date().toLocaleTimeString(); }
+function refreshCurrent() {
+  ({ overview: loadOverview, alerts: loadAlerts, sla: loadSla, monitors: loadMonitors, owners: loadOwners }[state.tab] || (() => {}))();
+}
+function switchTab(name) {
+  state.tab = name;
+  $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+  refreshCurrent();
+}
+function setupAuto() {
+  if (state.autoTimer) clearInterval(state.autoTimer);
+  const sec = +$('#auto').value;
+  if (sec > 0) state.autoTimer = setInterval(refreshCurrent, sec * 1000);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  $('#apiKey').value = apiKey();
+  $('#apiKey').addEventListener('change', e => { localStorage.setItem('apiKey', e.target.value.trim()); toast('已保存 API Key'); refreshCurrent(); });
+  $$('.tabs button').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+  $('#btnRefresh').addEventListener('click', refreshCurrent);
+  $('#auto').addEventListener('change', setupAuto);
+  $('#hours').addEventListener('change', refreshCurrent);
+  // alerts filters
+  ['fStatus', 'fSeverity', 'fService'].forEach(id => $('#' + id).addEventListener('change', () => {
+    state.alertFilter = { status: $('#fStatus').value, severity: $('#fSeverity').value, serviceName: $('#fService').value.trim() };
+    state.alertPage = 1; loadAlerts();
+  }));
+  $('#alertPrev').addEventListener('click', () => { if (state.alertPage > 1) { state.alertPage--; loadAlerts(); } });
+  $('#alertNext').addEventListener('click', () => { state.alertPage++; loadAlerts(); });
+  $('#monPrev').addEventListener('click', () => { if (state.monitorPage > 1) { state.monitorPage--; loadMonitors(); } });
+  $('#monNext').addEventListener('click', () => { state.monitorPage++; loadMonitors(); });
+  $('#monSearch').addEventListener('click', () => { state.monitorPage = 1; loadMonitors(); });
+  $('#drawerClose').addEventListener('click', () => $('#drawer').classList.remove('open'));
+  $('#slaRefresh').addEventListener('click', loadSla);
+  $('#ownerSave').addEventListener('click', saveOwner);
+  $('#impDry').addEventListener('click', () => doImport(true));
+  $('#impRun').addEventListener('click', () => doImport(false));
+  $('#ntSend').addEventListener('click', doNotifyTest);
+  switchTab('overview');
+  setupAuto();
+});
+window.showAlert = showAlert; window.delOwner = delOwner;

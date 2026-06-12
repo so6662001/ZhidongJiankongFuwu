@@ -3,73 +3,132 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>API 监控 · SLA 大盘</title>
-  <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:0;background:#f5f6fa;color:#222}
-    header{background:#1f2937;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-    header h1{font-size:18px;margin:0}
-    header input{padding:6px 10px;border-radius:6px;border:1px solid #4b5563;background:#111827;color:#fff}
-    header button{padding:6px 14px;border:0;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer}
-    main{padding:24px;max-width:1100px;margin:0 auto}
-    .cards{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
-    .card{background:#fff;border-radius:10px;padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08);min-width:160px}
-    .card .num{font-size:30px;font-weight:700}
-    .card .label{color:#6b7280;font-size:13px;margin-top:4px}
-    table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eef0f4;font-size:14px}
-    th{background:#f9fafb;color:#6b7280;font-weight:600}
-    .sev-P0,.firing{color:#dc2626;font-weight:600}
-    .ok{color:#16a34a}.warn{color:#d97706}
-    h2{font-size:15px;color:#374151;margin:24px 0 10px}
-    .muted{color:#9ca3af;font-size:12px}
-  </style>
+  <title>API 监控大盘</title>
+  <link rel="stylesheet" href="/assets/style.css"/>
 </head>
 <body>
-<header>
-  <h1>API 监控 · SLA 大盘</h1>
-  <input id="apiKey" placeholder="X-Api-Key（如已配置）"/>
-  <label class="muted">窗口(小时) <input id="hours" type="number" value="24" style="width:64px"/></label>
-  <button onclick="loadAll()">刷新</button>
-  <span id="ts" class="muted"></span>
+<header class="topbar">
+  <h1>🛰️ API 监控大盘</h1>
+  <span class="ts" id="ts"></span>
+  <span class="spacer"></span>
+  <label>窗口(h) <input id="hours" type="number" value="24" style="width:62px"/></label>
+  <label>自动刷新
+    <select id="auto"><option value="0">关</option><option value="15">15s</option><option value="30" selected>30s</option><option value="60">60s</option></select>
+  </label>
+  <input id="apiKey" placeholder="X-Api-Key（如已配置）" style="width:200px"/>
+  <button id="btnRefresh">刷新</button>
 </header>
+
+<nav class="tabs">
+  <button data-tab="overview" class="active">概览</button>
+  <button data-tab="alerts">告警</button>
+  <button data-tab="sla">SLA</button>
+  <button data-tab="monitors">监控项</button>
+  <button data-tab="owners">服务负责人</button>
+  <button data-tab="provision">导入纳管</button>
+  <button data-tab="notify">通知测试</button>
+</nav>
+
 <main>
-  <div class="cards">
-    <div class="card"><div class="num" id="firing">-</div><div class="label">当前告警(firing)</div></div>
-    <div class="card"><div class="num" id="today">-</div><div class="label">今日告警数</div></div>
-    <div class="card"><div class="num" id="worst">-</div><div class="label">最差可用率(%)</div></div>
-  </div>
+  <!-- 概览 -->
+  <section class="view active" id="view-overview">
+    <div class="cards">
+      <div class="card"><div class="num" id="ov-firing">-</div><div class="label">当前告警 (firing)</div></div>
+      <div class="card"><div class="num" id="ov-today">-</div><div class="label">今日告警数</div></div>
+      <div class="card"><div class="num" id="ov-worst">-</div><div class="label">最差可用率</div></div>
+      <div class="card"><div class="num" id="ov-incident">-</div><div class="label">有故障的监控数</div></div>
+    </div>
+    <h2>当前告警按服务分布</h2>
+    <div id="ov-byservice"><div class="empty">加载中…</div></div>
+  </section>
 
-  <h2>SLA / 可用率（按监控）</h2>
-  <table><thead><tr><th>监控</th><th>可用率(%)</th><th>故障时长(秒)</th></tr></thead>
-    <tbody id="slaBody"><tr><td colspan="3" class="muted">加载中…</td></tr></tbody></table>
+  <!-- 告警 -->
+  <section class="view" id="view-alerts">
+    <div class="toolbar">
+      <select id="fStatus"><option value="">全部状态</option><option value="firing">firing</option><option value="recovered">recovered</option></select>
+      <select id="fSeverity"><option value="">全部等级</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+      <input id="fService" placeholder="服务名过滤"/>
+      <span class="muted">点击行查看详情与通知回执</span>
+    </div>
+    <table><thead><tr><th>ID</th><th>状态</th><th>等级</th><th>服务</th><th>监控</th><th>内容</th><th>升级</th></tr></thead>
+      <tbody id="alertBody"></tbody></table>
+    <div class="pager"><button id="alertPrev">上一页</button><span id="alertPageInfo"></span><button id="alertNext">下一页</button></div>
+  </section>
 
-  <h2>最近告警</h2>
-  <table><thead><tr><th>ID</th><th>状态</th><th>等级</th><th>服务</th><th>监控</th><th>内容</th></tr></thead>
-    <tbody id="alertBody"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody></table>
+  <!-- SLA -->
+  <section class="view" id="view-sla">
+    <div class="toolbar">
+      <input id="slaSvc" placeholder="服务名(可选)"/>
+      <button id="slaRefresh">计算 SLA</button>
+      <span class="muted">基于告警故障时段合并估算</span>
+    </div>
+    <div class="cards" id="slaSummary"></div>
+    <h2>各监控可用率</h2>
+    <table><thead><tr><th>监控</th><th>可用率</th><th>百分比</th><th>故障时长</th></tr></thead>
+      <tbody id="slaBody"></tbody></table>
+  </section>
+
+  <!-- 监控项 -->
+  <section class="view" id="view-monitors">
+    <div class="toolbar"><input id="monKeyword" placeholder="名称/URL 关键字"/><button id="monSearch">搜索</button></div>
+    <table><thead><tr><th>ID</th><th>名称</th><th>服务</th><th>等级</th><th>方法</th><th>URL</th><th>HZB ID</th></tr></thead>
+      <tbody id="monBody"></tbody></table>
+    <div class="pager"><button id="monPrev">上一页</button><span id="monPageInfo"></span><button id="monNext">下一页</button></div>
+  </section>
+
+  <!-- 服务负责人 -->
+  <section class="view" id="view-owners">
+    <div class="form" style="margin-bottom:16px">
+      <div class="row">
+        <label>服务名<input id="ownSvc" placeholder="order-service"/></label>
+        <label>企业微信 userid(逗号)<input id="ownWecom" placeholder="zhangsan,lisi"/></label>
+        <label>邮件(逗号)<input id="ownEmail" placeholder="ops@company.com"/></label>
+      </div>
+      <button id="ownerSave">保存/更新</button>
+    </div>
+    <table><thead><tr><th>ID</th><th>服务</th><th>企业微信</th><th>邮件</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody id="ownerBody"></tbody></table>
+  </section>
+
+  <!-- 导入纳管 -->
+  <section class="view" id="view-provision">
+    <div class="form">
+      <div class="row">
+        <label>服务名(可选,默认取 OpenAPI title)<input id="impSvc" placeholder="order-service"/></label>
+        <label>告警等级<select id="impSev"><option>P2</option><option>P0</option><option>P1</option><option>P3</option></select></label>
+        <label>采集器(多探测点,可选)<input id="impCollector" placeholder="collector-beijing"/></label>
+      </div>
+      <div class="row"><label>OpenAPI 文档 URL（与下方内容二选一）<input id="impUrl" placeholder="https://svc/v3/api-docs"/></label></div>
+      <div class="row"><label>或 OpenAPI 内容(JSON/YAML)<textarea id="impContent" placeholder='{"openapi":"3.0.1",...}'></textarea></label></div>
+      <div style="display:flex;gap:10px">
+        <button id="impDry" class="btn-ghost" style="border:1px solid #d1d5db;background:#fff;color:#374151;padding:8px 16px;border-radius:6px;cursor:pointer">预览 (dryRun)</button>
+        <button id="impRun" style="border:0;background:var(--primary);color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer">正式导入</button>
+      </div>
+      <div class="result" id="impResult">预览/导入结果将显示在这里</div>
+    </div>
+  </section>
+
+  <!-- 通知测试 -->
+  <section class="view" id="view-notify">
+    <div class="form">
+      <div class="row">
+        <label>按服务负责人路由<input id="ntSvc" placeholder="order-service"/></label>
+      </div>
+      <div class="row">
+        <label>或 企业微信 userid(逗号)<input id="ntWecom" placeholder="zhangsan"/></label>
+        <label>或 邮件(逗号)<input id="ntEmail" placeholder="ops@company.com"/></label>
+      </div>
+      <button id="ntSend">发送测试通知</button>
+      <div class="result" id="ntResult">结果将显示在这里（验证企业微信/邮件投递与兜底切换）</div>
+    </div>
+  </section>
 </main>
-<script>
-function headers(){const k=document.getElementById('apiKey').value.trim();return k?{'X-Api-Key':k}:{}}
-async function get(u){const r=await fetch(u,{headers:headers()});if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).data}
-async function loadAll(){
-  const hours=document.getElementById('hours').value||24;
-  try{
-    const ov=await get('/api/v1/stats/overview');
-    document.getElementById('firing').textContent=ov.firing;
-    document.getElementById('today').textContent=ov.today;
-    const sla=await get('/api/v1/stats/sla?hours='+hours);
-    document.getElementById('worst').textContent=sla.worstAvailability;
-    document.getElementById('slaBody').innerHTML=(sla.monitors||[]).map(m=>{
-      const cls=m.availability>=99.9?'ok':(m.availability>=99?'warn':'firing');
-      return `<tr><td>${m.monitorName}</td><td class="${cls}">${m.availability}</td><td>${m.downtimeSec}</td></tr>`;
-    }).join('')||'<tr><td colspan="3" class="ok">窗口内无故障，可用率 100%</td></tr>';
-    const al=await get('/api/v1/alerts?size=20');
-    document.getElementById('alertBody').innerHTML=(al.records||[]).map(a=>
-      `<tr><td>${a.id}</td><td class="${a.status}">${a.status}</td><td class="sev-${a.severity}">${a.severity||''}</td><td>${a.serviceName||''}</td><td>${a.monitorName||''}</td><td>${(a.content||'').slice(0,60)}</td></tr>`
-    ).join('')||'<tr><td colspan="6" class="muted">暂无</td></tr>';
-    document.getElementById('ts').textContent='更新于 '+new Date().toLocaleTimeString();
-  }catch(e){alert('加载失败: '+e.message+'（如启用鉴权请填写 X-Api-Key）');}
-}
-loadAll();
-</script>
+
+<div class="drawer" id="drawer">
+  <div class="dh"><strong id="drawerTitle">告警详情</strong><button id="drawerClose" class="btn-ghost" style="border:1px solid #d1d5db;background:#fff;padding:4px 12px;border-radius:6px;cursor:pointer">关闭</button></div>
+  <div class="db" id="drawerBody"></div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/assets/app.js"></script>
 </body>
 </html>
