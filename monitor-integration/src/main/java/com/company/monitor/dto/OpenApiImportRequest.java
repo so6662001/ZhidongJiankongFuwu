@@ -31,4 +31,7 @@ public class OpenApiImportRequest {
 
     /** 仅导入这些方法（默认 GET，避免误触发写操作） */
     private java.util.List<String> includeMethods = java.util.List.of("GET");
+
+    /** 指定采集器（多探测点/多地域） */
+    private String collector;
 }

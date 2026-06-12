@@ -38,4 +38,7 @@ public class ImportItem {
     private Integer timeoutMs;
 
     private List<String> successCodes;
+
+    /** 指定采集器（多探测点/多地域） */
+    private String collector;
 }

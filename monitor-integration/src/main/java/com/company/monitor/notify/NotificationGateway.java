@@ -1,5 +1,6 @@
 package com.company.monitor.notify;
 
+import com.company.monitor.config.IntegrationProperties;
 import com.company.monitor.config.WeComProperties;
 import com.company.monitor.entity.Alert;
 import com.company.monitor.entity.NotifyLog;
@@ -28,45 +29,70 @@ public class NotificationGateway {
     private final ServiceOwnerMapper serviceOwnerMapper;
     private final NotifyLogMapper notifyLogMapper;
     private final WeComProperties weComProperties;
+    private final IntegrationProperties integrationProperties;
 
     public NotificationGateway(WeComAppClient weComAppClient, EmailNotifier emailNotifier,
                                TemplateRenderer renderer, ServiceOwnerMapper serviceOwnerMapper,
-                               NotifyLogMapper notifyLogMapper, WeComProperties weComProperties) {
+                               NotifyLogMapper notifyLogMapper, WeComProperties weComProperties,
+                               IntegrationProperties integrationProperties) {
         this.weComAppClient = weComAppClient;
         this.emailNotifier = emailNotifier;
         this.renderer = renderer;
         this.serviceOwnerMapper = serviceOwnerMapper;
         this.notifyLogMapper = notifyLogMapper;
         this.weComProperties = weComProperties;
+        this.integrationProperties = integrationProperties;
     }
 
     public void notify(Alert alert, boolean recovered) {
         ServiceOwner owner = findOwner(alert.getServiceName());
-        List<String> wecomUserIds = resolveWecomUserIds(owner);
-        List<String> emails = resolveEmails(owner);
+        dispatch(alert, recovered, resolveWecomUserIds(owner), resolveEmails(owner), renderer.title(alert, recovered));
+    }
 
-        String title = renderer.title(alert, recovered);
-        // 企业微信应用消息（精准@人）
-        if (weComProperties.isConfigured() && !wecomUserIds.isEmpty()) {
-            sendWecom(alert, recovered, wecomUserIds, title);
+    /**
+     * 升级通知：发给升级接收人（额外的人/渠道），标题带升级标识。
+     */
+    public void notifyEscalation(Alert alert, List<String> wecomUserIds, List<String> emails) {
+        String title = "【告警升级】" + renderer.title(alert, false);
+        dispatch(alert, false, wecomUserIds, emails, title);
+    }
+
+    /**
+     * 按通知模式（failover/all）派发到企业微信/邮件。
+     */
+    private void dispatch(Alert alert, boolean recovered, List<String> wecomUserIds, List<String> emails, String title) {
+        boolean failover = !"all".equalsIgnoreCase(integrationProperties.getNotifyMode());
+        boolean wecomAvailable = weComProperties.isConfigured() && !wecomUserIds.isEmpty();
+        boolean emailAvailable = !emails.isEmpty();
+
+        boolean wecomOk = false;
+        if (wecomAvailable) {
+            wecomOk = sendWecom(alert, recovered, wecomUserIds, title);
         } else {
             log.info("跳过企业微信通知(未配置或无接收人), alertId={}", alert.getId());
         }
-        // 邮件
-        if (!emails.isEmpty()) {
-            sendEmail(alert, recovered, emails, title);
-        } else {
-            log.info("跳过邮件通知(无接收人), alertId={}", alert.getId());
+
+        // failover：企业微信成功则不再发邮件；失败或不可用则兜底邮件
+        boolean sendEmailNow = emailAvailable && (!failover || !wecomOk);
+        if (sendEmailNow) {
+            boolean emailOk = sendEmail(alert, recovered, emails, title);
+            if (failover && !wecomOk && emailOk) {
+                log.info("企业微信不可用/失败，已兜底邮件通知 alertId={}", alert.getId());
+            }
+        } else if (!emailAvailable && (!wecomAvailable || !wecomOk)) {
+            log.warn("告警无任何可用通知渠道送达 alertId={}", alert.getId());
         }
     }
 
-    private void sendWecom(Alert alert, boolean recovered, List<String> userIds, String title) {
+    private boolean sendWecom(Alert alert, boolean recovered, List<String> userIds, String title) {
         long start = System.currentTimeMillis();
         String desc = renderer.wecomDescription(alert, recovered);
         NotifyLog logRec = baseLog(alert, "wecom_app", String.join(",", userIds), desc);
+        boolean ok = false;
         try {
             weComAppClient.sendTextCard(userIds, title, desc, renderer.detailUrl(alert));
             logRec.setSuccess(1);
+            ok = true;
         } catch (Exception e) {
             logRec.setSuccess(0);
             logRec.setErrorMsg(truncate(e.getMessage(), 500));
@@ -75,9 +101,10 @@ public class NotificationGateway {
             logRec.setCostMs((int) (System.currentTimeMillis() - start));
             notifyLogMapper.insert(logRec);
         }
+        return ok;
     }
 
-    private void sendEmail(Alert alert, boolean recovered, List<String> emails, String title) {
+    private boolean sendEmail(Alert alert, boolean recovered, List<String> emails, String title) {
         long start = System.currentTimeMillis();
         String html = renderer.emailHtml(alert, recovered);
         NotifyLog logRec = baseLog(alert, "email", String.join(",", emails), html);
@@ -94,6 +121,7 @@ public class NotificationGateway {
                 sleep((long) Math.pow(2, retry) * 500);
             }
         }
+        boolean ok = last == null;
         if (last != null) {
             logRec.setSuccess(0);
             logRec.setErrorMsg(truncate(last.getMessage(), 500));
@@ -102,6 +130,24 @@ public class NotificationGateway {
         logRec.setRetryCount(retry);
         logRec.setCostMs((int) (System.currentTimeMillis() - start));
         notifyLogMapper.insert(logRec);
+        return ok;
+    }
+
+    /** 供测试/升级使用：解析服务负责人接收人。 */
+    public List<String> wecomUserIdsForService(String serviceName) {
+        return resolveWecomUserIds(findOwner(serviceName));
+    }
+
+    public List<String> emailsForService(String serviceName) {
+        return resolveEmails(findOwner(serviceName));
+    }
+
+    public void notifyToReceivers(Alert alert, boolean recovered, List<String> wecomUserIds, List<String> emails) {
+        dispatch(alert, recovered, wecomUserIds, emails, renderer.title(alert, recovered));
+    }
+
+    public List<String> splitList(String s) {
+        return split(s);
     }
 
     private NotifyLog baseLog(Alert alert, String channel, String receiver, String content) {

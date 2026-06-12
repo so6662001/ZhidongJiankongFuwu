@@ -26,8 +26,9 @@ spring:
     properties:
       mail:
         smtp:
+          auth: ${MAIL_AUTH:true}
           ssl:
-            enable: true
+            enable: ${MAIL_SSL:true}
 
 mybatis-plus:
   configuration:
@@ -69,6 +70,13 @@ integration:
   openapi-allow-private-network: ${OPENAPI_ALLOW_PRIVATE:false}
   # 本服务 webhook 可达地址；配置后导入时自动在 HertzBeat 建 webhook 接收人+全量转发策略
   self-webhook-url: ${SELF_WEBHOOK_URL:}
+  # 通知模式：failover(企业微信优先,失败兜底邮件) / all(都发)
+  notify-mode: ${NOTIFY_MODE:failover}
+  # 告警升级：firing 超过该秒数未恢复则升级通知（<=0 关闭）
+  escalate-after-seconds: ${ESCALATE_AFTER_SECONDS:1800}
+  escalate-scan-interval-ms: ${ESCALATE_SCAN_INTERVAL_MS:60000}
+  escalate-wecom-userids: ${ESCALATE_WECOM_USERIDS:}
+  escalate-email-list: ${ESCALATE_EMAIL_LIST:}
 
 logging:
   level:

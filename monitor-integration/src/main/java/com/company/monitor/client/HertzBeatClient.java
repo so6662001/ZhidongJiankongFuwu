@@ -341,6 +341,11 @@ public class HertzBeatClient {
         monitor.put("description", buildDescription(spec));
         root.set("monitor", monitor);
 
+        // 指定采集器（多探测点）；为空则系统调度
+        if (spec.getCollector() != null && !spec.getCollector().isBlank()) {
+            root.put("collector", spec.getCollector());
+        }
+
         ArrayNode params = objectMapper.createArrayNode();
         int port = spec.getPort() != null ? spec.getPort() : ("https".equalsIgnoreCase(spec.getScheme()) ? 443 : 80);
         boolean ssl = "https".equalsIgnoreCase(spec.getScheme());

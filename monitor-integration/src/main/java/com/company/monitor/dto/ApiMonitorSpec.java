@@ -61,4 +61,7 @@ public class ApiMonitorSpec {
 
     /** 原始完整 URL（用于本地登记与去重展示） */
     private String fullUrl;
+
+    /** 指定采集器（多探测点/多地域）。为空由系统调度 */
+    private String collector;
 }

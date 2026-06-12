@@ -45,5 +45,9 @@ public class Alert {
 
     private Integer notifyCount;
 
+    private Integer escalated;
+
+    private LocalDateTime escalatedAt;
+
     private LocalDateTime createdAt;
 }

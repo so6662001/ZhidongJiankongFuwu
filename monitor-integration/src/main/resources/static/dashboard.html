@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>API 监控 · SLA 大盘</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:0;background:#f5f6fa;color:#222}
+    header{background:#1f2937;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    header h1{font-size:18px;margin:0}
+    header input{padding:6px 10px;border-radius:6px;border:1px solid #4b5563;background:#111827;color:#fff}
+    header button{padding:6px 14px;border:0;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer}
+    main{padding:24px;max-width:1100px;margin:0 auto}
+    .cards{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+    .card{background:#fff;border-radius:10px;padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08);min-width:160px}
+    .card .num{font-size:30px;font-weight:700}
+    .card .label{color:#6b7280;font-size:13px;margin-top:4px}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eef0f4;font-size:14px}
+    th{background:#f9fafb;color:#6b7280;font-weight:600}
+    .sev-P0,.firing{color:#dc2626;font-weight:600}
+    .ok{color:#16a34a}.warn{color:#d97706}
+    h2{font-size:15px;color:#374151;margin:24px 0 10px}
+    .muted{color:#9ca3af;font-size:12px}
+  </style>
+</head>
+<body>
+<header>
+  <h1>API 监控 · SLA 大盘</h1>
+  <input id="apiKey" placeholder="X-Api-Key（如已配置）"/>
+  <label class="muted">窗口(小时) <input id="hours" type="number" value="24" style="width:64px"/></label>
+  <button onclick="loadAll()">刷新</button>
+  <span id="ts" class="muted"></span>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="num" id="firing">-</div><div class="label">当前告警(firing)</div></div>
+    <div class="card"><div class="num" id="today">-</div><div class="label">今日告警数</div></div>
+    <div class="card"><div class="num" id="worst">-</div><div class="label">最差可用率(%)</div></div>
+  </div>
+
+  <h2>SLA / 可用率（按监控）</h2>
+  <table><thead><tr><th>监控</th><th>可用率(%)</th><th>故障时长(秒)</th></tr></thead>
+    <tbody id="slaBody"><tr><td colspan="3" class="muted">加载中…</td></tr></tbody></table>
+
+  <h2>最近告警</h2>
+  <table><thead><tr><th>ID</th><th>状态</th><th>等级</th><th>服务</th><th>监控</th><th>内容</th></tr></thead>
+    <tbody id="alertBody"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody></table>
+</main>
+<script>
+function headers(){const k=document.getElementById('apiKey').value.trim();return k?{'X-Api-Key':k}:{}}
+async function get(u){const r=await fetch(u,{headers:headers()});if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).data}
+async function loadAll(){
+  const hours=document.getElementById('hours').value||24;
+  try{
+    const ov=await get('/api/v1/stats/overview');
+    document.getElementById('firing').textContent=ov.firing;
+    document.getElementById('today').textContent=ov.today;
+    const sla=await get('/api/v1/stats/sla?hours='+hours);
+    document.getElementById('worst').textContent=sla.worstAvailability;
+    document.getElementById('slaBody').innerHTML=(sla.monitors||[]).map(m=>{
+      const cls=m.availability>=99.9?'ok':(m.availability>=99?'warn':'firing');
+      return `<tr><td>${m.monitorName}</td><td class="${cls}">${m.availability}</td><td>${m.downtimeSec}</td></tr>`;
+    }).join('')||'<tr><td colspan="3" class="ok">窗口内无故障，可用率 100%</td></tr>';
+    const al=await get('/api/v1/alerts?size=20');
+    document.getElementById('alertBody').innerHTML=(al.records||[]).map(a=>
+      `<tr><td>${a.id}</td><td class="${a.status}">${a.status}</td><td class="sev-${a.severity}">${a.severity||''}</td><td>${a.serviceName||''}</td><td>${a.monitorName||''}</td><td>${(a.content||'').slice(0,60)}</td></tr>`
+    ).join('')||'<tr><td colspan="6" class="muted">暂无</td></tr>';
+    document.getElementById('ts').textContent='更新于 '+new Date().toLocaleTimeString();
+  }catch(e){alert('加载失败: '+e.message+'（如启用鉴权请填写 X-Api-Key）');}
+}
+loadAll();
+</script>
+</body>
+</html>

@@ -36,4 +36,20 @@ public class IntegrationProperties {
      * 例：http://monitor-integration:8080/api/v1/webhook/hertzbeat
      */
     private String selfWebhookUrl;
+
+    /**
+     * 通知发送模式：
+     * - failover：优先企业微信，失败/不可用时兜底邮件（默认）
+     * - all：所有已配置渠道都发
+     */
+    private String notifyMode = "failover";
+
+    /** 告警升级：firing 持续超过该秒数仍未恢复则升级通知（<=0 关闭） */
+    private long escalateAfterSeconds = 1800;
+
+    /** 升级通知额外接收人：企业微信 userid（逗号分隔） */
+    private String escalateWecomUserids;
+
+    /** 升级通知额外接收人：邮件（逗号分隔） */
+    private String escalateEmailList;
 }

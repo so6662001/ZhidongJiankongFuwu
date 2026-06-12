@@ -25,4 +25,7 @@ public class ImportRequest {
 
     /** 默认采集间隔（秒） */
     private Integer defaultIntervalSec = 60;
+
+    /** 默认采集器（多探测点），item 未指定时使用 */
+    private String defaultCollector;
 }

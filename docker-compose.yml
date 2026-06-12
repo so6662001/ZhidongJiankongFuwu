@@ -117,6 +117,14 @@ services:
       MAIL_PORT: ${MAIL_PORT:-465}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SSL: ${MAIL_SSL:-true}
+      MAIL_AUTH: ${MAIL_AUTH:-true}
+      # 通知模式 failover(企业微信优先,失败兜底邮件)/all
+      NOTIFY_MODE: ${NOTIFY_MODE:-failover}
+      # 告警升级：firing 超过 N 秒未恢复则升级；升级额外接收人
+      ESCALATE_AFTER_SECONDS: ${ESCALATE_AFTER_SECONDS:-1800}
+      ESCALATE_WECOM_USERIDS: ${ESCALATE_WECOM_USERIDS:-}
+      ESCALATE_EMAIL_LIST: ${ESCALATE_EMAIL_LIST:-}
 
 volumes:
   vm-data:

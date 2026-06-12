@@ -25,10 +25,13 @@ public class AlertController {
 
     private final AlertMapper alertMapper;
     private final NotifyLogMapper notifyLogMapper;
+    private final com.company.monitor.service.SlaService slaService;
 
-    public AlertController(AlertMapper alertMapper, NotifyLogMapper notifyLogMapper) {
+    public AlertController(AlertMapper alertMapper, NotifyLogMapper notifyLogMapper,
+                           com.company.monitor.service.SlaService slaService) {
         this.alertMapper = alertMapper;
         this.notifyLogMapper = notifyLogMapper;
+        this.slaService = slaService;
     }
 
     @Operation(summary = "告警列表（分页/过滤）")
@@ -88,5 +91,12 @@ public class AlertController {
         data.put("today", today);
         data.put("firingByService", byService);
         return Result.ok(data);
+    }
+
+    @Operation(summary = "SLA/可用率（按监控合并故障时段估算）")
+    @GetMapping("/stats/sla")
+    public Result<Map<String, Object>> sla(@RequestParam(required = false) String serviceName,
+                                           @RequestParam(defaultValue = "24") int hours) {
+        return Result.ok(slaService.computeSla(serviceName, hours));
     }
 }

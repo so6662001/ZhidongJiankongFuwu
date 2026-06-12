@@ -243,6 +243,7 @@ public class ProvisionService {
         spec.setContentType(item.getContentType());
         spec.setBody(item.getBody());
         spec.setSuccessCodes(item.getSuccessCodes());
+        spec.setCollector(item.getCollector() != null ? item.getCollector() : req.getDefaultCollector());
         return spec;
     }
 
@@ -259,6 +260,7 @@ public class ProvisionService {
         spec.setScheme(base.scheme);
         spec.setHost(base.host);
         spec.setPort(base.port);
+        spec.setCollector(req.getCollector());
 
         // 路径参数用占位值替换，标记需人工确认
         String resolvedPath = path;
