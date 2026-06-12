@@ -77,7 +77,8 @@ services:
 
   monitor-integration:
     build:
-      context: ./monitor-integration
+      context: .
+      dockerfile: monitor-integration/Dockerfile
     container_name: monitor-integration
     restart: unless-stopped
     depends_on:
