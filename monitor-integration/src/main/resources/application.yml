@@ -43,6 +43,21 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+# 自监控：暴露健康检查与 Prometheus 指标（供 HertzBeat/Prometheus 反向监控本服务）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: false
+    mail:
+      enabled: false
+
 # ---- HertzBeat 引擎连接 ----
 hertzbeat:
   base-url: ${HERTZBEAT_BASE_URL:http://localhost:1157}

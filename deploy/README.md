@@ -49,7 +49,8 @@ docker compose logs -f monitor-integration
 | **监控大盘（Vue 前端）** | http://localhost:8080/ → /ui/ （概览/告警/SLA/监控项/负责人/维护窗口/值班/导入/CMDB/通知测试）|
 | 旧版静态大盘 | http://localhost:8080/dashboard.html |
 | 集成层 Swagger | http://localhost:8080/swagger-ui.html |
-| 集成层健康检查 | http://localhost:8080/health |
+| 集成层健康检查 | http://localhost:8080/health 、/actuator/health |
+| 集成层 Prometheus 指标 | http://localhost:8080/actuator/prometheus （可被 Prometheus/HertzBeat 反向监控）|
 | VictoriaMetrics | http://localhost:8428 |
 
 ## 四、端到端操作流程

@@ -42,7 +42,23 @@
 - 开发：`cd frontend && npm i && npm run dev`（Vite 代理 `/api`、`/health` 到 `:8080`）。
 - 页签：概览(趋势)、告警(过滤/详情/Ack/响应时间曲线)、SLA(可用率趋势)、监控项、服务负责人、维护窗口、值班排班、导入纳管、CMDB、通知测试。顶部支持 X-Api-Key 与明暗主题。
 
-## 6. 相关环境变量
+## 6. 集成层自监控（避免"监控系统挂了没人知道"）
+
+- **Actuator + Prometheus 指标**：`/actuator/health`、`/actuator/prometheus`（JVM/HTTP/Hikari 等），
+  可被 Prometheus 抓取或在 HertzBeat 里把本服务也作为一个监控目标，实现对监控系统自身的反向监控。
+- **Dead Man's Switch 心跳**：配置 `HEARTBEAT_URL`（如 Healthchecks.io ping 地址）+ `INTEGRATION_HEARTBEAT_INTERVAL_MS`，
+  集成层定期上报心跳；外部看门狗在超时未收到时**独立**告警（不依赖本系统）。
+
+## 7. CMDB 定时同步
+
+- 配置 `cmdb.url` + `cmdb.scheduled-enabled=true` + `cmdb.sync-interval-ms`，周期性从 CMDB 同步服务负责人。
+- 也可随时手动 `POST /api/v1/cmdb/sync`。
+
+## 8. CI（GitHub Actions）
+
+`.github/workflows/ci.yml`：push/PR 触发，后端 `mvn test`（跳过前端构建以加速）+ 打包，前端 `npm ci && npm run build`。
+
+## 9. 相关环境变量
 
 | 变量 | 说明 |
 | --- | --- |

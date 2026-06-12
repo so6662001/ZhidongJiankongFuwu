@@ -59,4 +59,10 @@ public class IntegrationProperties {
      * 安全前提：网关必须强制 SSO 并剥离客户端伪造的同名头。
      */
     private String ssoTrustedHeader;
+
+    /**
+     * Dead Man's Switch 心跳上报地址（如 Healthchecks.io ping URL）。
+     * 配置后按周期上报；外部看门狗在超时未收到心跳时独立告警（避免"监控系统挂了没人知道"）。
+     */
+    private String heartbeatUrl;
 }
