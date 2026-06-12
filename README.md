@@ -14,7 +14,7 @@
 | [03-数据库设计](docs/03-数据库设计.md) | 完整表结构 DDL、ER 图、数据保留策略 |
 | [04-技术选型与部署](docs/04-技术选型与部署.md) | 技术栈、部署架构、安全、自监控、实施路线图 |
 | [05-API接口设计](docs/05-API接口设计.md) | 监控平台对外提供的 REST API 设计 |
-| [06-MVP开发提示词](docs/06-MVP开发提示词.md) | 基于开源 Uptime Kuma 二次开发（Uptime Kuma 引擎 + Java 集成层），分阶段喂给 AI 编码代理的 MVP 开发提示词 |
+| [06-MVP开发提示词](docs/06-MVP开发提示词.md) | 基于开源 Apache HertzBeat 二次开发（HertzBeat 引擎 + Java 集成层），分阶段喂给 AI 编码代理的 MVP 开发提示词 |
 
 ## 核心能力概览
 
