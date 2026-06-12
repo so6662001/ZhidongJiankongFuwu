@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class NotificationGateway {
 
     private final WeComAppClient weComAppClient;
+    private final WeComRobotClient weComRobotClient;
     private final EmailNotifier emailNotifier;
     private final TemplateRenderer renderer;
     private final ServiceOwnerMapper serviceOwnerMapper;
@@ -32,12 +33,14 @@ public class NotificationGateway {
     private final IntegrationProperties integrationProperties;
     private final com.company.monitor.service.OncallService oncallService;
 
-    public NotificationGateway(WeComAppClient weComAppClient, EmailNotifier emailNotifier,
+    public NotificationGateway(WeComAppClient weComAppClient, WeComRobotClient weComRobotClient,
+                               EmailNotifier emailNotifier,
                                TemplateRenderer renderer, ServiceOwnerMapper serviceOwnerMapper,
                                NotifyLogMapper notifyLogMapper, WeComProperties weComProperties,
                                IntegrationProperties integrationProperties,
                                com.company.monitor.service.OncallService oncallService) {
         this.weComAppClient = weComAppClient;
+        this.weComRobotClient = weComRobotClient;
         this.emailNotifier = emailNotifier;
         this.renderer = renderer;
         this.serviceOwnerMapper = serviceOwnerMapper;
@@ -85,7 +88,11 @@ public class NotificationGateway {
         if (wecomAvailable) {
             wecomOk = sendWecom(alert, recovered, wecomUserIds, title);
         } else {
-            log.info("跳过企业微信通知(未配置或无接收人), alertId={}", alert.getId());
+            log.info("跳过企业微信应用消息(未配置或无接收人), alertId={}", alert.getId());
+        }
+        // 群机器人：应用消息未成功且机器人已配置时补发（群播，作为更易配置的真实渠道）
+        if (!wecomOk && weComProperties.isRobotConfigured()) {
+            wecomOk = sendWecomRobot(alert, recovered) || wecomOk;
         }
 
         // failover：企业微信成功则不再发邮件；失败或不可用则兜底邮件
@@ -113,6 +120,26 @@ public class NotificationGateway {
             logRec.setSuccess(0);
             logRec.setErrorMsg(truncate(e.getMessage(), 500));
             log.warn("企业微信通知失败 alertId={}: {}", alert.getId(), e.getMessage());
+        } finally {
+            logRec.setCostMs((int) (System.currentTimeMillis() - start));
+            notifyLogMapper.insert(logRec);
+        }
+        return ok;
+    }
+
+    private boolean sendWecomRobot(Alert alert, boolean recovered) {
+        long start = System.currentTimeMillis();
+        String md = renderer.robotMarkdown(alert, recovered);
+        NotifyLog logRec = baseLog(alert, "wecom_robot", "group-robot", md);
+        boolean ok = false;
+        try {
+            weComRobotClient.sendMarkdown(md, null);
+            logRec.setSuccess(1);
+            ok = true;
+        } catch (Exception e) {
+            logRec.setSuccess(0);
+            logRec.setErrorMsg(truncate(e.getMessage(), 500));
+            log.warn("企业微信群机器人通知失败 alertId={}: {}", alert.getId(), e.getMessage());
         } finally {
             logRec.setCostMs((int) (System.currentTimeMillis() - start));
             notifyLogMapper.insert(logRec);

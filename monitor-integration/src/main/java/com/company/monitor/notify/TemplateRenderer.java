@@ -82,6 +82,27 @@ public class TemplateRenderer {
         return properties.getDetailBaseUrl();
     }
 
+    /** 群机器人 markdown 文案。 */
+    public String robotMarkdown(Alert alert, boolean recovered) {
+        StringBuilder sb = new StringBuilder();
+        if (recovered) {
+            sb.append("**【API已恢复】").append(safe(alert.getServiceName())).append("**\n");
+            sb.append("> 监控：").append(safe(alert.getMonitorName())).append("\n");
+            if (alert.getUrl() != null) sb.append("> 接口：").append(alert.getUrl()).append("\n");
+            sb.append("> 故障持续：").append(durationText(alert)).append("\n");
+            sb.append("> 恢复时间：").append(now());
+        } else {
+            sb.append("**【API告警·").append(safe(alert.getSeverity())).append("】")
+                    .append(safe(alert.getServiceName())).append("**\n");
+            sb.append("> 监控：<font color=\"warning\">").append(safe(alert.getMonitorName())).append("</font>\n");
+            if (alert.getUrl() != null) sb.append("> 接口：").append(alert.getUrl()).append("\n");
+            sb.append("> 错误：").append(safe(alert.getContent())).append("\n");
+            sb.append("> 时间：").append(alert.getFirstSeen() != null ? alert.getFirstSeen().format(FMT) : now()).append("\n");
+            sb.append("> [查看详情](").append(detailUrl(alert)).append(")");
+        }
+        return sb.toString();
+    }
+
     private void row(StringBuilder sb, String k, String v) {
         sb.append("<tr><td style=\"padding:4px 12px 4px 0;color:#888;\">").append(k)
                 .append("</td><td style=\"padding:4px 0;\">").append(v).append("</td></tr>");

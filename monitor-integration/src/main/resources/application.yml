@@ -56,6 +56,8 @@ wecom:
   agentid: ${WECOM_AGENTID:}
   secret: ${WECOM_SECRET:}
   default-userids: ${WECOM_DEFAULT_USERIDS:}
+  # 群机器人 Webhook（最易配置的真实投递渠道；应用消息未配/失败时补发到群）
+  robot-webhook: ${WECOM_ROBOT_WEBHOOK:}
 
 # ---- 集成层自身 ----
 integration:
