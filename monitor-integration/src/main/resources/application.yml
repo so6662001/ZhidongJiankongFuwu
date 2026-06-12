@@ -1,0 +1,107 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: monitor-integration
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://localhost:3306/monitor_integration?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root123456}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3s
+  mail:
+    host: ${MAIL_HOST:smtp.exmail.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_AUTH:true}
+          ssl:
+            enable: ${MAIL_SSL:true}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+# 自监控：暴露健康检查与 Prometheus 指标（供 HertzBeat/Prometheus 反向监控本服务）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: false
+    mail:
+      enabled: false
+
+# ---- HertzBeat 引擎连接 ----
+hertzbeat:
+  base-url: ${HERTZBEAT_BASE_URL:http://localhost:1157}
+  username: ${HERTZBEAT_USERNAME:admin}
+  password: ${HERTZBEAT_PASSWORD:hertzbeat}
+  timeout-seconds: 10
+
+# ---- 企业微信自建应用（精准@人）----
+wecom:
+  corpid: ${WECOM_CORPID:}
+  agentid: ${WECOM_AGENTID:}
+  secret: ${WECOM_SECRET:}
+  default-userids: ${WECOM_DEFAULT_USERIDS:}
+  # 群机器人 Webhook（最易配置的真实投递渠道；应用消息未配/失败时补发到群）
+  robot-webhook: ${WECOM_ROBOT_WEBHOOK:}
+
+# ---- 集成层自身 ----
+integration:
+  webhook-token: ${WEBHOOK_TOKEN:change-me}
+  detail-base-url: ${DETAIL_BASE_URL:http://localhost:1157}
+  renotify-interval-seconds: 600
+  # 管理 API 鉴权 Key（请求头 X-Api-Key）。生产务必配置；为空则不鉴权
+  api-key: ${API_KEY:}
+  # OpenAPI 拉取 host 白名单（逗号分隔），为空不限 host（仍拦截环回/内网保留地址）
+  openapi-allowed-hosts: ${OPENAPI_ALLOWED_HOSTS:}
+  # 是否允许拉取私网地址的 OpenAPI 文档（默认 false 防 SSRF）
+  openapi-allow-private-network: ${OPENAPI_ALLOW_PRIVATE:false}
+  # 本服务 webhook 可达地址；配置后导入时自动在 HertzBeat 建 webhook 接收人+全量转发策略
+  self-webhook-url: ${SELF_WEBHOOK_URL:}
+  # 通知模式：failover(企业微信优先,失败兜底邮件) / all(都发)
+  notify-mode: ${NOTIFY_MODE:failover}
+  # 告警升级：firing 超过该秒数未恢复则升级通知（<=0 关闭）
+  escalate-after-seconds: ${ESCALATE_AFTER_SECONDS:1800}
+  escalate-scan-interval-ms: ${ESCALATE_SCAN_INTERVAL_MS:60000}
+  escalate-wecom-userids: ${ESCALATE_WECOM_USERIDS:}
+  escalate-email-list: ${ESCALATE_EMAIL_LIST:}
+  # SSO 网关可信身份头（如 X-Auth-User）；配置后携带该头即视为已认证
+  sso-trusted-header: ${SSO_TRUSTED_HEADER:}
+  # Dead Man's Switch 心跳上报地址与间隔
+  heartbeat-url: ${HEARTBEAT_URL:}
+  heartbeat-interval-ms: ${HEARTBEAT_INTERVAL_MS:60000}
+  # 安全严格模式：开启则缺少鉴权/弱 token 时拒绝启动（生产建议 true）
+  security-strict: ${SECURITY_STRICT:false}
+
+logging:
+  level:
+    com.company.monitor: INFO

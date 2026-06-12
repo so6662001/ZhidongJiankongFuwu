@@ -1,0 +1,170 @@
+# =============================================================================
+# HertzBeat 配置覆盖（基于官方默认 application.yml 修改）
+# 变更点：
+#   1) 元数据库由内置 H2 改为外部 MySQL
+#   2) 历史指标存储由 duckdb 改为 VictoriaMetrics
+# 其余保持官方默认。注意：升级 HertzBeat 大版本时，建议重新对照官方默认文件同步本文件。
+# =============================================================================
+server:
+  port: 1157
+spring:
+  application:
+    name: ${HOSTNAME:@hertzbeat@}${PID}
+  profiles:
+    active: prod
+  ai:
+    mcp:
+      server:
+        enabled: true
+        stdio: false
+        protocol: streamable
+        streamable-http:
+          mcp-endpoint: /api/mcp
+        name: hertzbeat-mcp-server
+        version: 1.0.0
+        type: SYNC
+  mvc:
+    static-path-pattern: /**
+  jackson:
+    default-property-inclusion: ALWAYS
+  web:
+    resources:
+      static-locations:
+        - classpath:/dist/
+        - classpath:../dist/
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration, org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+  freemarker:
+    enabled: false
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+management:
+  health:
+    mail:
+      enabled: off
+  endpoints:
+    web:
+      exposure:
+        include:
+          - 'metrics'
+          - 'health'
+          - 'prometheus'
+    enabled-by-default: on
+  endpoint:
+    prometheus:
+      access: read_only
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+sureness:
+  container: jakarta_servlet
+  auths:
+    - digest
+    - basic
+    - jwt
+  jwt:
+    # 安全：务必通过环境变量 HZB_JWT_SECRET 覆盖默认值（默认值为官方公开示例，可被伪造 JWT）
+    secret: ${HZB_JWT_SECRET:'CyaFv0bwq2Eik0jdrKUtsA6bx3sDJeFV643RLnfKefTjsIfJLBa2YkhEqEGtcHDTNe4CU6+98tVt4bisXQ13rbN0oxhUZR73M6EByXIO+SV5dKhaX0csgOCTlCxq20yhmUea6H6JIpSE2Rwp'}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  # 元数据库：外部 MySQL（容器内通过服务名 mysql 访问）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root123456}
+    url: jdbc:mysql://mysql:3306/hertzbeat?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    hikari:
+      max-lifetime: 120000
+
+  jpa:
+    show-sql: false
+    database-platform: org.eclipse.persistence.platform.database.MySQLPlatform
+    database: mysql
+    properties:
+      eclipselink:
+        logging:
+          level: SEVERE
+
+  flyway:
+    enabled: true
+    clean-disabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations:
+      - classpath:db/migration/{vendor}
+
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    username: ${MAIL_USERNAME:tancloud@qq.com}
+    password: ${MAIL_PASSWORD:your-password}
+    port: ${MAIL_PORT:465}
+    properties:
+      mail:
+        smtp:
+          socketFactoryClass: javax.net.ssl.SSLSocketFactory
+          ssl:
+            enable: true
+          starttls:
+            enable: false
+
+common:
+  queue:
+    type: memory
+
+warehouse:
+  store:
+    # 关闭内置 duckdb，改用 VictoriaMetrics
+    duckdb:
+      enabled: false
+      expire-time: 90d
+      store-path: data/history.duckdb
+    victoria-metrics:
+      enabled: true
+      url: ${VM_URL:http://victoria-metrics:8428}
+      username: ${VM_USER:root}
+      password: ${VM_PASSWORD:root}
+      insert:
+        buffer-size: 100
+        flush-interval: 3
+        compression:
+          enabled: false
+      cluster:
+        enabled: false
+  real-time:
+    memory:
+      enabled: true
+      init-size: 16
+
+alerter:
+  console-url: ${INTEGRATION_CONSOLE_URL:http://localhost:1157}
+  we-work-webhook-url: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=
+  ding-talk-webhook-url: https://oapi.dingtalk.com/robot/send?access_token=
+  fly-book-webhook-url: https://open.feishu.cn/open-apis/bot/v2/hook/
+  telegram-webhook-url: https://api.telegram.org/bot%s/sendMessage
+  discord-webhook-url: https://discord.com/api/v9/channels/%s/messages
+  server-chan-webhook-url: https://sctapi.ftqq.com/%s.send
+  gotify-webhook-url: http://127.0.0.1/message?token=%s
+  inhibit:
+    ttl: 14400000
+
+scheduler:
+  server:
+    enabled: true
+    port: 1158
+
+grafana:
+  enabled: false

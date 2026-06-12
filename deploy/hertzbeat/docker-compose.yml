@@ -1,0 +1,86 @@
+services:
+  # ---------------------------------------------------------------------------
+  # 时序库：VictoriaMetrics —— 存储 HertzBeat 采集的监控指标历史，用于趋势/SLA
+  # ---------------------------------------------------------------------------
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.93.4
+    container_name: hzb-victoria-metrics
+    restart: unless-stopped
+    command:
+      - "--storageDataPath=/storage"
+      - "--retentionPeriod=3"   # 保留 3 个月，可按需调整
+      - "--httpListenAddr=:8428"
+    volumes:
+      - vm-data:/storage
+    ports:
+      - "8428:8428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # 元数据库：MySQL —— 存储 HertzBeat 的监控项、告警规则、通知配置等元数据
+  # 首次启动会自动建库 hertzbeat（见 init/ 脚本）
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: hzb-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: hertzbeat
+      TZ: Asia/Shanghai
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_general_ci"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-root123456}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # 监控引擎：Apache HertzBeat
+  #  - 元数据存 MySQL
+  #  - 指标存 VictoriaMetrics
+  # ---------------------------------------------------------------------------
+  hertzbeat:
+    image: apache/hertzbeat:latest
+    container_name: hertzbeat
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      victoria-metrics:
+        condition: service_healthy
+    ports:
+      - "1157:1157"
+      - "1158:1158"
+    environment:
+      LANG: zh_CN.UTF-8
+      TZ: Asia/Shanghai
+    volumes:
+      # 用自定义 application.yml 覆盖默认配置（连接 MySQL + VictoriaMetrics）
+      - ./conf/application.yml:/opt/hertzbeat/config/application.yml
+      # 重要：官方镜像未内置 MySQL 驱动，需把 mysql-connector-j 放到 ext-lib 目录
+      # 先执行：deploy/hertzbeat/ext-lib/download.sh 下载驱动 jar
+      - ./ext-lib:/opt/hertzbeat/ext-lib
+      - hzb-data:/opt/hertzbeat/data
+      - hzb-logs:/opt/hertzbeat/logs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1157/api/account/auth/refresh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  vm-data:
+  mysql-data:
+  hzb-data:
+  hzb-logs:

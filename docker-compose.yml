@@ -1,0 +1,135 @@
+# =============================================================================
+# 一体化部署：Apache HertzBeat（监控引擎）+ MySQL（元数据/业务库）
+#   + VictoriaMetrics（时序库）+ Redis（access_token 缓存）+ monitor-integration（Java 集成层）
+#
+# 启动前：先下载 HertzBeat 的 MySQL 驱动（官方镜像未内置）：
+#   bash deploy/hertzbeat/ext-lib/download.sh
+# 然后：docker compose up -d --build
+# =============================================================================
+services:
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.93.4
+    container_name: hzb-victoria-metrics
+    restart: unless-stopped
+    command:
+      - "--storageDataPath=/storage"
+      - "--retentionPeriod=3"
+      - "--httpListenAddr=:8428"
+    volumes:
+      - vm-data:/storage
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: hzb-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: hertzbeat
+      TZ: Asia/Shanghai
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_general_ci"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-root123456}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hzb-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  hertzbeat:
+    image: apache/hertzbeat:latest
+    container_name: hertzbeat
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      victoria-metrics:
+        condition: service_healthy
+    ports:
+      - "1157:1157"
+      - "1158:1158"
+    environment:
+      LANG: zh_CN.UTF-8
+      TZ: Asia/Shanghai
+      # 安全：务必修改为自有随机值（覆盖官方公开默认 JWT 密钥）
+      HZB_JWT_SECRET: ${HZB_JWT_SECRET:-please-change-this-to-a-long-random-secret}
+    volumes:
+      - ./deploy/hertzbeat/conf/application.yml:/opt/hertzbeat/config/application.yml
+      - ./deploy/hertzbeat/ext-lib:/opt/hertzbeat/ext-lib
+      - hzb-data:/opt/hertzbeat/data
+      - hzb-logs:/opt/hertzbeat/logs
+
+  monitor-integration:
+    build:
+      context: .
+      dockerfile: monitor-integration/Dockerfile
+    container_name: monitor-integration
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hertzbeat:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Asia/Shanghai
+      DB_URL: "jdbc:mysql://mysql:3306/monitor_integration?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true"
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      HERTZBEAT_BASE_URL: http://hertzbeat:1157
+      HERTZBEAT_USERNAME: ${HERTZBEAT_USERNAME:-admin}
+      HERTZBEAT_PASSWORD: ${HERTZBEAT_PASSWORD:-hertzbeat}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-change-me}
+      DETAIL_BASE_URL: ${DETAIL_BASE_URL:-http://localhost:1157}
+      # 本服务 webhook 可达地址（容器内用服务名），导入时自动在 HertzBeat 建转发策略，打通立即通知
+      SELF_WEBHOOK_URL: ${SELF_WEBHOOK_URL:-http://monitor-integration:8080/api/v1/webhook/hertzbeat}
+      # 管理 API 鉴权 Key（X-Api-Key），生产务必配置
+      API_KEY: ${API_KEY:-}
+      OPENAPI_ALLOWED_HOSTS: ${OPENAPI_ALLOWED_HOSTS:-}
+      OPENAPI_ALLOW_PRIVATE: ${OPENAPI_ALLOW_PRIVATE:-false}
+      # 企业微信自建应用（精准@人），不配置则跳过企业微信通知
+      WECOM_CORPID: ${WECOM_CORPID:-}
+      WECOM_AGENTID: ${WECOM_AGENTID:-}
+      WECOM_SECRET: ${WECOM_SECRET:-}
+      WECOM_DEFAULT_USERIDS: ${WECOM_DEFAULT_USERIDS:-}
+      WECOM_ROBOT_WEBHOOK: ${WECOM_ROBOT_WEBHOOK:-}
+      # 邮件 SMTP，不配置则跳过邮件通知
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SSL: ${MAIL_SSL:-true}
+      MAIL_AUTH: ${MAIL_AUTH:-true}
+      # 通知模式 failover(企业微信优先,失败兜底邮件)/all
+      NOTIFY_MODE: ${NOTIFY_MODE:-failover}
+      # 告警升级：firing 超过 N 秒未恢复则升级；升级额外接收人
+      ESCALATE_AFTER_SECONDS: ${ESCALATE_AFTER_SECONDS:-1800}
+      ESCALATE_WECOM_USERIDS: ${ESCALATE_WECOM_USERIDS:-}
+      ESCALATE_EMAIL_LIST: ${ESCALATE_EMAIL_LIST:-}
+
+volumes:
+  vm-data:
+  mysql-data:
+  hzb-data:
+  hzb-logs:

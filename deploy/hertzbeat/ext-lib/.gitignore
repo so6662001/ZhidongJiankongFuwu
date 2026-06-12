@@ -1,0 +1,2 @@
+# 不提交驱动 jar，由 download.sh 下载
+*.jar
