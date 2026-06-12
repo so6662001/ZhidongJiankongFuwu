@@ -24,11 +24,11 @@
 | Java 集成层骨架（Spring Boot）| `monitor-integration/` | ✅ 阶段3 脚手架完成（HertzBeat 客户端、健康检查、Flyway 建表），已实测连通 |
 | OpenAPI 自动导入 / 批量纳管 | `monitor-integration/` | ✅ 阶段4 完成，已实测（OpenAPI 解析、dryRun 预览、幂等创建/更新到 HertzBeat）|
 | 告警归档 + 企业微信应用消息(精准@人) + 邮件 | `monitor-integration/` | ✅ 阶段5 完成，已实测（Webhook 归档、firing/recovered 状态机、通知路由与回执、查询/统计 API）|
-| 一体化部署联调 + 单测 | 全栈 | ⏳ 阶段6（待开发）|
+| 一体化部署联调 + 单测 | `docker-compose.yml` / `deploy/README.md` / `monitor-integration/src/test` | ✅ 阶段6 完成（一体化 compose、单元测试、端到端自检清单）|
 
 > MVP 已确定包含：**OpenAPI 自动导入、VictoriaMetrics 时序库、企业微信应用消息精准@人**。
-> 详见 `docs/06-MVP开发提示词.md`。本地实测：HertzBeat 启动正常、API 登录可用、MySQL 自动建表、
-> 集成层成功登录 HertzBeat 并查询监控列表。
+> 详见 `docs/06-MVP开发提示词.md`。一体化部署与端到端自检见 `deploy/README.md`，一条命令 `docker compose up -d --build` 起全栈。
+> 本地实测：HertzBeat 启动、API 登录、MySQL 自动建表、OpenAPI 批量纳管、告警 Webhook 归档与通知路由、查询统计 API 全链路通过。
 
 ## 核心能力概览
 
