@@ -16,6 +16,19 @@
 | [05-API接口设计](docs/05-API接口设计.md) | 监控平台对外提供的 REST API 设计 |
 | [06-MVP开发提示词](docs/06-MVP开发提示词.md) | 基于开源 Apache HertzBeat 二次开发（HertzBeat 引擎 + Java 集成层），分阶段喂给 AI 编码代理的 MVP 开发提示词 |
 
+## 实现进度（基于 Apache HertzBeat 二次开发）
+
+| 模块 | 路径 | 状态 |
+| --- | --- | --- |
+| HertzBeat 部署（引擎 + MySQL + VictoriaMetrics）| `deploy/hertzbeat/` | ✅ 阶段0 完成，已实测启动 |
+| Java 集成层骨架（Spring Boot）| `monitor-integration/` | ✅ 阶段3 脚手架完成（HertzBeat 客户端、健康检查、Flyway 建表），已实测连通 |
+| OpenAPI 自动导入 / 批量纳管 | `monitor-integration/` | ⏳ 阶段4（待开发）|
+| 告警归档 + 企业微信应用消息(精准@人) + 邮件 | `monitor-integration/` | ⏳ 阶段5（待开发）|
+
+> MVP 已确定包含：**OpenAPI 自动导入、VictoriaMetrics 时序库、企业微信应用消息精准@人**。
+> 详见 `docs/06-MVP开发提示词.md`。本地实测：HertzBeat 启动正常、API 登录可用、MySQL 自动建表、
+> 集成层成功登录 HertzBeat 并查询监控列表。
+
 ## 核心能力概览
 
 - 接口级主动拨测：可用性、状态码、响应时间、响应体断言。
