@@ -108,6 +108,14 @@ public class AlertController {
         return Result.ok(slaService.computeTrend(hours, buckets));
     }
 
+    @Operation(summary = "SLA 可用率趋势（按时间桶整体可用率）")
+    @GetMapping("/stats/sla-trend")
+    public Result<Map<String, Object>> slaTrend(@RequestParam(required = false) String serviceName,
+                                                @RequestParam(defaultValue = "24") int hours,
+                                                @RequestParam(defaultValue = "24") int buckets) {
+        return Result.ok(slaService.computeSlaTrend(serviceName, hours, buckets));
+    }
+
     @Data
     public static class AckRequest {
         private String ackedBy;

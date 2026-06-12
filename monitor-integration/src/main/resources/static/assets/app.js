@@ -51,29 +51,37 @@ async function loadOverview() {
   } catch (e) { toast(e.message); }
 }
 
-// 趋势折线（内联 SVG，无外部依赖）
+// 通用折线 SVG 渲染。pts: [{label, value}]，opts: {min,max,suffix,fmt}
+function lineChartSvg(pts, opts = {}) {
+  if (!pts.length) return '<div class="empty">无数据</div>';
+  const W = 900, H = 160, padL = 36, padT = 10, padR = 10, padB = 22;
+  const vals = pts.map(p => +p.value);
+  const maxv = opts.max != null ? opts.max : Math.max(1, ...vals);
+  const minv = opts.min != null ? opts.min : 0;
+  const range = (maxv - minv) || 1;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const x = i => padL + (pts.length === 1 ? iw / 2 : i / (pts.length - 1) * iw);
+  const y = v => padT + ih - ((v - minv) / range) * ih;
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(+p.value).toFixed(1)}`).join(' ');
+  const area = `${padL},${padT + ih} ${line} ${x(pts.length - 1).toFixed(1)},${padT + ih}`;
+  const dots = pts.map((p, i) => `<circle class="dot" cx="${x(i).toFixed(1)}" cy="${y(+p.value).toFixed(1)}" r="2"><title>${esc(p.label)}: ${esc(p.value)}${esc(opts.suffix || '')}</title></circle>`).join('');
+  const xlabels = pts.map((p, i) => (i % 4 === 0 || i === pts.length - 1)
+    ? `<text class="lbl" x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(String(p.label).slice(-5))}</text>` : '').join('');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line class="axis" x1="${padL}" y1="${padT + ih}" x2="${W - padR}" y2="${padT + ih}"></line>
+    <text class="lbl" x="2" y="${padT + 8}">${(+maxv).toFixed(opts.dp ?? 0)}${esc(opts.suffix || '')}</text>
+    <text class="lbl" x="2" y="${padT + ih}">${(+minv).toFixed(opts.dp ?? 0)}</text>
+    <polyline class="area" points="${area}"></polyline>
+    <polyline class="line" points="${line}"></polyline>${dots}${xlabels}</svg>`;
+}
+
+// 告警新增趋势
 async function loadTrend() {
   try {
     const d = await api('/stats/trend?hours=' + windowHours() + '&buckets=24');
-    const pts = d.points || [];
-    const el = $('#ov-trend');
-    if (!pts.length) { el.innerHTML = '<div class="empty">无数据</div>'; return; }
-    const W = 900, H = 160, padL = 30, padB = 22, padT = 10, padR = 10;
-    const maxv = Math.max(1, ...pts.map(p => +p.count));
-    const iw = W - padL - padR, ih = H - padT - padB;
-    const x = i => padL + (pts.length === 1 ? iw / 2 : i / (pts.length - 1) * iw);
-    const y = v => padT + ih - (v / maxv) * ih;
-    const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(+p.count).toFixed(1)}`).join(' ');
-    const area = `${padL},${padT + ih} ${line} ${x(pts.length - 1).toFixed(1)},${padT + ih}`;
-    const dots = pts.map((p, i) => +p.count > 0 ? `<circle class="dot" cx="${x(i).toFixed(1)}" cy="${y(+p.count).toFixed(1)}" r="2.5"><title>${esc(p.time)}: ${p.count}</title></circle>` : '').join('');
-    const xlabels = pts.map((p, i) => (i % 4 === 0 || i === pts.length - 1)
-      ? `<text class="lbl" x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(p.time.slice(-5))}</text>` : '').join('');
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <line class="axis" x1="${padL}" y1="${padT + ih}" x2="${W - padR}" y2="${padT + ih}"></line>
-      <text class="lbl" x="2" y="${padT + 8}">${maxv}</text>
-      <polyline class="area" points="${area}"></polyline>
-      <polyline class="line" points="${line}"></polyline>${dots}${xlabels}</svg>
-      <div class="muted">窗口 ${d.windowHours}h · 共新增 ${d.total} 条告警</div>`;
+    const pts = (d.points || []).map(p => ({ label: p.time, value: +p.count }));
+    $('#ov-trend').innerHTML = lineChartSvg(pts, { suffix: '' }) +
+      `<div class="muted">窗口 ${d.windowHours}h · 共新增 ${d.total} 条告警</div>`;
   } catch (e) { $('#ov-trend').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 
@@ -84,11 +92,13 @@ async function loadAlerts() {
     const qs = new URLSearchParams({ page: state.alertPage, size: 15 });
     ['status', 'severity', 'serviceName'].forEach(k => { if (f[k]) qs.set(k, f[k]); });
     const d = await api('/alerts?' + qs.toString());
+    const marks = a => [a.escalated == 1 ? '<span class="badge b-P1">已升级</span>' : '',
+      a.ackedBy ? '<span class="badge b-P2">已认领</span>' : ''].filter(Boolean).join(' ') || '<span class="muted">—</span>';
     const rows = (d.records || []).map(a => `<tr class="clickable" onclick="showAlert(${a.id})">
       <td>${a.id}</td><td>${statusBadge(a.status)}</td><td>${sevBadge(a.severity)}</td>
       <td>${esc(a.serviceName)}</td><td>${esc(a.monitorName)}</td>
       <td>${esc((a.content || '').slice(0, 50))}</td>
-      <td>${a.escalated == 1 ? '⬆️已升级' : ''}</td></tr>`).join('');
+      <td>${marks(a)}</td></tr>`).join('');
     $('#alertBody').innerHTML = rows || '<tr><td colspan="7" class="empty">暂无告警</td></tr>';
     $('#alertPageInfo').textContent = `第 ${d.current || state.alertPage} / ${d.pages || 1} 页 · 共 ${d.total || 0} 条`;
     $('#alertPrev').disabled = (d.current || 1) <= 1;
@@ -115,10 +125,30 @@ async function showAlert(id) {
       kv('认领', a.ackedBy ? esc(a.ackedBy) + ' @ ' + esc(a.ackedAt) : '未认领') +
       kv('备注', esc(a.remark || '-')) +
       `<div style="margin:12px 0"><button id="ackBtn" data-id="${a.id}" style="border:0;background:var(--primary);color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer">认领/添加备注</button></div>` +
+      '<h2>响应时间(近6h)</h2><div class="chart" id="rtChart"><div class="muted">—</div></div>' +
       '<h2>通知回执</h2>' + logs;
     $('#ackBtn').addEventListener('click', () => ackAlert(a.id));
     $('#drawer').classList.add('open');
+    if (a.hzbMonitorId) loadResponseTime(a.hzbMonitorId);
   } catch (e) { toast(e.message); }
+}
+
+// 响应时间历史（来自 HertzBeat 时序库）
+async function loadResponseTime(hzbId) {
+  const box = $('#rtChart'); if (!box) return;
+  box.innerHTML = '<div class="muted">加载响应时间…</div>';
+  try {
+    const d = await api('/hertzbeat/monitors/' + hzbId + '/response-time?history=6h');
+    const values = (d && d.values) || {};
+    const series = Object.values(values)[0] || [];
+    const pts = series.map((it, i) => {
+      const v = it.origin ?? it.value ?? it.mean ?? it.avg;
+      return { label: it.time || it.timestamp || (i + 1), value: +v };
+    }).filter(p => !isNaN(p.value));
+    box.innerHTML = pts.length
+      ? lineChartSvg(pts, { suffix: 'ms' })
+      : '<div class="empty">暂无响应时间数据（监控不可达或无历史）</div>';
+  } catch (e) { box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function ackAlert(id) {
   const acker = prompt('认领人（你的姓名/工号）:', localStorage.getItem('acker') || '');
@@ -143,6 +173,14 @@ async function loadSla() {
          <td style="width:220px"><div class="bar"><span class="${avClass(m.availability)}" style="width:${m.availability}%"></span></div></td>
          <td>${m.availability}%</td><td>${m.downtimeSec}s</td></tr>`).join('')
       : '<tr><td colspan="4" class="empty" style="color:#16a34a">窗口内无故障，可用率 100%</td></tr>';
+    // SLA 可用率趋势
+    try {
+      const t = await api('/stats/sla-trend?hours=' + windowHours() + '&buckets=24' + (slaService() ? '&serviceName=' + encodeURIComponent(slaService()) : ''));
+      const pts = (t.points || []).map(p => ({ label: p.time, value: +p.availability }));
+      const lo = Math.min(95, ...(pts.map(p => p.value)));
+      $('#slaTrend').innerHTML = lineChartSvg(pts, { min: Math.floor(lo), max: 100, suffix: '%', dp: 1 }) +
+        `<div class="muted">监控总数 ${t.totalMonitors} · 最低桶可用率 ${t.worstBucketAvailability}%</div>`;
+    } catch (e) { $('#slaTrend').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
     setTs();
   } catch (e) { toast(e.message); }
 }

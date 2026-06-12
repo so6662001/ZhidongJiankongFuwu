@@ -23,4 +23,11 @@ public class HertzBeatController {
     public Result<JsonNode> monitors(@RequestParam(required = false) String query) {
         return Result.ok(hertzBeatClient.listMonitors(query));
     }
+
+    @Operation(summary = "查询监控响应时间历史（来自 HertzBeat 时序库）")
+    @GetMapping("/monitors/{hzbMonitorId}/response-time")
+    public Result<JsonNode> responseTime(@PathVariable long hzbMonitorId,
+                                         @RequestParam(defaultValue = "6h") String history) {
+        return Result.ok(hertzBeatClient.metricHistory(hzbMonitorId, "api.summary.responseTime", history));
+    }
 }

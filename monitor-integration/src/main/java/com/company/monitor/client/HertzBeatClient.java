@@ -463,6 +463,15 @@ public class HertzBeatClient {
         }
     }
 
+    /**
+     * 查询监控某指标字段的历史数据（透传 HertzBeat warehouse）。
+     * metricFull 形如 api.summary.responseTime（app.metric.field）。
+     */
+    public JsonNode metricHistory(long monitorId, String metricFull, String history) {
+        String h = (history == null || history.isBlank()) ? "6h" : history;
+        return authedGet(base() + "/api/monitor/" + monitorId + "/metric/" + metricFull + "?history=" + urlEncode(h));
+    }
+
     private JsonNode authedGet(String url) {
         try {
             JsonNode result = doGet(url, token());

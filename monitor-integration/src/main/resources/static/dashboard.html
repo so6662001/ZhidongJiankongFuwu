@@ -53,7 +53,7 @@
       <input id="fService" placeholder="服务名过滤"/>
       <span class="muted">点击行查看详情与通知回执</span>
     </div>
-    <table><thead><tr><th>ID</th><th>状态</th><th>等级</th><th>服务</th><th>监控</th><th>内容</th><th>升级</th></tr></thead>
+    <table><thead><tr><th>ID</th><th>状态</th><th>等级</th><th>服务</th><th>监控</th><th>内容</th><th>标记</th></tr></thead>
       <tbody id="alertBody"></tbody></table>
     <div class="pager"><button id="alertPrev">上一页</button><span id="alertPageInfo"></span><button id="alertNext">下一页</button></div>
   </section>
@@ -66,6 +66,8 @@
       <span class="muted">基于告警故障时段合并估算</span>
     </div>
     <div class="cards" id="slaSummary"></div>
+    <h2>整体可用率趋势</h2>
+    <div class="chart" id="slaTrend"><div class="empty">点击「计算 SLA」加载</div></div>
     <h2>各监控可用率</h2>
     <table><thead><tr><th>监控</th><th>可用率</th><th>百分比</th><th>故障时长</th></tr></thead>
       <tbody id="slaBody"></tbody></table>

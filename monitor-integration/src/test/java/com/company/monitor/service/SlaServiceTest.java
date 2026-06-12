@@ -33,7 +33,7 @@ class SlaServiceTest {
 
         when(mapper.selectList(any())).thenReturn(List.of(a1, a2));
 
-        SlaService service = new SlaService(mapper);
+        SlaService service = new SlaService(mapper, null);
         Map<String, Object> result = service.computeSla(null, 24);
 
         List<Map<String, Object>> monitors = (List<Map<String, Object>>) result.get("monitors");
