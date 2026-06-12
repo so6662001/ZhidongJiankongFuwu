@@ -130,6 +130,8 @@ public class AlertService {
             // 用接收时刻作为首次发现时间，避免 payload 时区与本服务不一致导致持续时长计算异常
             alert.setFirstSeen(LocalDateTime.now());
             alert.setLastSeen(LocalDateTime.now());
+            // 显式设置 created_at（与 first_seen 同源），避免 DB 时区与本服务不一致导致统计/趋势偏差
+            alert.setCreatedAt(LocalDateTime.now());
             alert.setNotifyCount(1);
             alertMapper.insert(alert);
             notificationGateway.notify(alert, false);

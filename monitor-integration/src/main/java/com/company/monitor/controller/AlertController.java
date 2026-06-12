@@ -10,6 +10,7 @@ import com.company.monitor.mapper.AlertMapper;
 import com.company.monitor.mapper.NotifyLogMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.Data;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -98,5 +99,34 @@ public class AlertController {
     public Result<Map<String, Object>> sla(@RequestParam(required = false) String serviceName,
                                            @RequestParam(defaultValue = "24") int hours) {
         return Result.ok(slaService.computeSla(serviceName, hours));
+    }
+
+    @Operation(summary = "告警趋势（按时间桶统计新增告警数）")
+    @GetMapping("/stats/trend")
+    public Result<Map<String, Object>> trend(@RequestParam(defaultValue = "24") int hours,
+                                             @RequestParam(defaultValue = "24") int buckets) {
+        return Result.ok(slaService.computeTrend(hours, buckets));
+    }
+
+    @Data
+    public static class AckRequest {
+        private String ackedBy;
+        private String remark;
+    }
+
+    @Operation(summary = "认领/确认告警（记录处理人与备注）")
+    @PostMapping("/alerts/{id}/ack")
+    public Result<Alert> ack(@PathVariable Long id, @RequestBody(required = false) AckRequest req) {
+        Alert alert = alertMapper.selectById(id);
+        if (alert == null) {
+            throw new BizException(404, "告警不存在: " + id);
+        }
+        alert.setAckedBy(req != null && req.getAckedBy() != null ? req.getAckedBy() : "unknown");
+        alert.setAckedAt(LocalDateTime.now());
+        if (req != null && req.getRemark() != null) {
+            alert.setRemark(req.getRemark());
+        }
+        alertMapper.updateById(alert);
+        return Result.ok(alert);
     }
 }

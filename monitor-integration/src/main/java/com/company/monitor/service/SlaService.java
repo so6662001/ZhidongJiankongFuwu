@@ -82,6 +82,48 @@ public class SlaService {
         return result;
     }
 
+    /**
+     * 告警趋势：按时间桶统计新增告警数（基于 created_at）。
+     */
+    public Map<String, Object> computeTrend(int hours, int buckets) {
+        int h = hours <= 0 ? 24 : hours;
+        int n = buckets <= 0 ? 24 : Math.min(buckets, 200);
+        LocalDateTime to = LocalDateTime.now();
+        LocalDateTime from = to.minusHours(h);
+        long fromEpoch = toEpoch(from);
+        long span = toEpoch(to) - fromEpoch;
+        long bucketSec = Math.max(1, span / n);
+
+        QueryWrapper<Alert> qw = new QueryWrapper<>();
+        qw.ge("created_at", from);
+        List<Alert> alerts = alertMapper.selectList(qw);
+
+        long[] counts = new long[n];
+        for (Alert a : alerts) {
+            if (a.getCreatedAt() == null) {
+                continue;
+            }
+            long idx = (toEpoch(a.getCreatedAt()) - fromEpoch) / bucketSec;
+            if (idx >= 0 && idx < n) {
+                counts[(int) idx]++;
+            }
+        }
+        List<Map<String, Object>> points = new ArrayList<>();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm");
+        for (int i = 0; i < n; i++) {
+            Map<String, Object> p = new LinkedHashMap<>();
+            p.put("time", from.plusSeconds(i * bucketSec).format(fmt));
+            p.put("count", counts[i]);
+            points.add(p);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("windowHours", h);
+        result.put("buckets", n);
+        result.put("total", alerts.size());
+        result.put("points", points);
+        return result;
+    }
+
     private long mergeAndSum(List<long[]> intervals) {
         intervals.sort(Comparator.comparingLong(a -> a[0]));
         long total = 0;

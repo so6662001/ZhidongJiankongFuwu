@@ -16,6 +16,7 @@
     <select id="auto"><option value="0">关</option><option value="15">15s</option><option value="30" selected>30s</option><option value="60">60s</option></select>
   </label>
   <input id="apiKey" placeholder="X-Api-Key（如已配置）" style="width:200px"/>
+  <button id="btnTheme" title="切换主题">🌓</button>
   <button id="btnRefresh">刷新</button>
 </header>
 
@@ -38,6 +39,8 @@
       <div class="card"><div class="num" id="ov-worst">-</div><div class="label">最差可用率</div></div>
       <div class="card"><div class="num" id="ov-incident">-</div><div class="label">有故障的监控数</div></div>
     </div>
+    <h2>告警趋势（新增告警数）</h2>
+    <div class="chart" id="ov-trend"><div class="empty">加载中…</div></div>
     <h2>当前告警按服务分布</h2>
     <div id="ov-byservice"><div class="empty">加载中…</div></div>
   </section>

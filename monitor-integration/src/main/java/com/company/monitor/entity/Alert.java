@@ -49,5 +49,11 @@ public class Alert {
 
     private LocalDateTime escalatedAt;
 
+    private String ackedBy;
+
+    private LocalDateTime ackedAt;
+
+    private String remark;
+
     private LocalDateTime createdAt;
 }
