@@ -29,11 +29,17 @@ public class ProvisionService {
     private final HertzBeatClient hertzBeatClient;
     private final MonitorRefMapper monitorRefMapper;
     private final OkHttpClient httpClient;
+    private final SsrfGuard ssrfGuard;
+    private final com.company.monitor.config.IntegrationProperties properties;
 
-    public ProvisionService(HertzBeatClient hertzBeatClient, MonitorRefMapper monitorRefMapper, OkHttpClient httpClient) {
+    public ProvisionService(HertzBeatClient hertzBeatClient, MonitorRefMapper monitorRefMapper,
+                            OkHttpClient httpClient, SsrfGuard ssrfGuard,
+                            com.company.monitor.config.IntegrationProperties properties) {
         this.hertzBeatClient = hertzBeatClient;
         this.monitorRefMapper = monitorRefMapper;
         this.httpClient = httpClient;
+        this.ssrfGuard = ssrfGuard;
+        this.properties = properties;
     }
 
     /**
@@ -56,6 +62,7 @@ public class ProvisionService {
                 result.add(it);
             }
         }
+        ensureAlertRulesIfNeeded(req.isDryRun(), result);
         return result;
     }
 
@@ -65,6 +72,7 @@ public class ProvisionService {
     public ImportResult importOpenApi(OpenApiImportRequest req) {
         String content = req.getOpenapiContent();
         if ((content == null || content.isBlank()) && req.getOpenapiUrl() != null) {
+            ssrfGuard.validateFetchUrl(req.getOpenapiUrl());
             content = fetch(req.getOpenapiUrl());
         }
         if (content == null || content.isBlank()) {
@@ -115,7 +123,32 @@ public class ProvisionService {
                 }
             }
         }
+        ensureAlertRulesIfNeeded(req.isDryRun(), result);
         return result;
+    }
+
+    /**
+     * 非 dryRun 且有监控被创建/更新时，确保默认告警规则存在（打通"立即通知"链路）。
+     */
+    private void ensureAlertRulesIfNeeded(boolean dryRun, ImportResult result) {
+        if (dryRun) {
+            return;
+        }
+        if (result.getCreated() > 0 || result.getUpdated() > 0) {
+            try {
+                hertzBeatClient.ensureDefaultApiAlertDefines();
+            } catch (Exception e) {
+                log.warn("确保默认告警规则失败: {}", e.getMessage());
+            }
+            String selfWebhook = properties.getSelfWebhookUrl();
+            if (selfWebhook != null && !selfWebhook.isBlank()) {
+                try {
+                    hertzBeatClient.ensureWebhookNoticeRoute(selfWebhook, properties.getWebhookToken());
+                } catch (Exception e) {
+                    log.warn("确保 webhook 转发策略失败: {}", e.getMessage());
+                }
+            }
+        }
     }
 
     // ----- 核心：把规格落地到 HertzBeat + 本地登记（幂等） -----
@@ -137,10 +170,21 @@ public class ProvisionService {
             MonitorRef ref = existing != null ? existing : new MonitorRef();
             ref.setHzbMonitorId(hzbId);
             fillRef(ref, spec);
-            if (ref.getId() == null) {
-                monitorRefMapper.insert(ref);
-            } else {
-                monitorRefMapper.updateById(ref);
+            try {
+                if (ref.getId() == null) {
+                    monitorRefMapper.insert(ref);
+                } else {
+                    monitorRefMapper.updateById(ref);
+                }
+            } catch (Exception e) {
+                // 本地落库失败 → 回滚已创建的 HertzBeat 监控，避免产生孤儿监控
+                try {
+                    hertzBeatClient.deleteMonitor(hzbId);
+                    log.warn("本地登记失败，已回滚 HertzBeat 监控 id={}", hzbId);
+                } catch (Exception ex) {
+                    log.error("本地登记失败且回滚 HertzBeat 监控 id={} 也失败: {}", hzbId, ex.getMessage());
+                }
+                throw e;
             }
             ImportResult.Item it = ImportResult.Item.of("created", spec);
             it.setHzbMonitorId(hzbId);

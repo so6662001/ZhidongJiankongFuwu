@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ProvisionServiceTest {
 
-    // dryRun 分支不会调用 HertzBeat 客户端或 Mapper，可传 null
-    private final ProvisionService service = new ProvisionService(null, null, null);
+    // dryRun 分支不会调用 HertzBeat 客户端、Mapper、SsrfGuard 或 properties，可传 null
+    private final ProvisionService service = new ProvisionService(null, null, null, null, null);
 
     private static final String OPENAPI = """
             {

@@ -142,18 +142,181 @@ public class HertzBeatClient {
 
     /**
      * 按名称精确查找监控 ID，找不到返回 null。
+     * 用 search 过滤缩小范围，并分页遍历做精确匹配，避免同名/数量大时漏查。
      */
     public Long findMonitorIdByName(String name) {
-        JsonNode root = authedGet(base() + "/api/monitors?pageIndex=0&pageSize=50&sort=gmtCreate&order=desc");
-        JsonNode content = root.path("data").path("content");
-        if (content.isArray()) {
+        int pageSize = 100;
+        for (int pageIndex = 0; pageIndex < 50; pageIndex++) {
+            String url = base() + "/api/monitors?app=api&pageIndex=" + pageIndex + "&pageSize=" + pageSize
+                    + "&search=" + urlEncode(name);
+            JsonNode root = authedGet(url);
+            JsonNode data = root.path("data");
+            JsonNode content = data.path("content");
+            if (!content.isArray() || content.isEmpty()) {
+                return null;
+            }
             for (JsonNode m : content) {
                 if (name.equals(m.path("name").asText())) {
                     return m.path("id").asLong();
                 }
             }
+            boolean last = data.path("last").asBoolean(true);
+            if (last) {
+                return null;
+            }
         }
         return null;
+    }
+
+    private String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
+    /**
+     * 确保 api 应用的默认告警规则存在（幂等，按规则名判断）。
+     * 覆盖：不可访问(可用性 down)、返回错误码(>=400)、响应过慢。
+     */
+    public void ensureDefaultApiAlertDefines() {
+        java.util.Set<String> existing = listAlertDefineNames();
+        createDefineIfAbsent(existing, "auto-api-unavailable", "realtime_metric",
+                "equals(__app__,\"api\") && equals(__available__,\"down\")", "critical",
+                "API 接口不可访问", "API ${__instancename__} 不可访问(超时/连接失败)");
+        createDefineIfAbsent(existing, "auto-api-status-error", "realtime_metric",
+                "equals(__app__,\"api\") && statusCode >= 400", "critical",
+                "API 返回错误状态码", "API ${__instancename__} 返回错误码 ${statusCode}");
+        createDefineIfAbsent(existing, "auto-api-slow-response", "realtime_metric",
+                "equals(__app__,\"api\") && responseTime > 3000", "warning",
+                "API 响应过慢", "API ${__instancename__} 响应耗时 ${responseTime}ms");
+    }
+
+    /**
+     * 确保 HertzBeat 中存在指向集成层 webhook 的接收人与全量转发策略（幂等，按名）。
+     * HertzBeat webhook 通过 Authorization: Bearer 携带 token。
+     */
+    public void ensureWebhookNoticeRoute(String webhookUrl, String token) {
+        String receiverName = "auto-integration-webhook";
+        String ruleName = "auto-integration-forward-all";
+
+        Long receiverId = findNoticeReceiverId(receiverName);
+        if (receiverId == null) {
+            ObjectNode r = objectMapper.createObjectNode();
+            r.put("name", receiverName);
+            r.put("type", 2); // 2 = webHook
+            r.put("hookUrl", webhookUrl);
+            if (token != null && !token.isBlank()) {
+                r.put("hookAuthType", "Bearer");
+                r.put("hookAuthToken", token);
+            }
+            JsonNode resp = authedPost(base() + "/api/notice/receiver", r);
+            checkCode(resp, "创建 webhook 接收人");
+            receiverId = findNoticeReceiverId(receiverName);
+            log.info("已创建 HertzBeat webhook 接收人: {} -> {}", receiverName, webhookUrl);
+        }
+        if (receiverId == null) {
+            log.warn("创建 webhook 接收人后未能回查到 ID，跳过策略创建");
+            return;
+        }
+        if (!noticeRuleExists(ruleName)) {
+            ObjectNode rule = objectMapper.createObjectNode();
+            rule.put("name", ruleName);
+            // receiverId/receiverName 为列表类型
+            ArrayNode rids = objectMapper.createArrayNode();
+            rids.add(receiverId);
+            rule.set("receiverId", rids);
+            ArrayNode rnames = objectMapper.createArrayNode();
+            rnames.add(receiverName);
+            rule.set("receiverName", rnames);
+            rule.put("enable", true);
+            rule.put("filterAll", true);
+            JsonNode resp = authedPost(base() + "/api/notice/rule", rule);
+            checkCode(resp, "创建告警转发策略");
+            log.info("已创建 HertzBeat 全量转发策略: {}", ruleName);
+        }
+    }
+
+    private Long findNoticeReceiverId(String name) {
+        try {
+            JsonNode root = authedGet(base() + "/api/notice/receivers");
+            JsonNode data = root.path("data");
+            JsonNode arr = data.isArray() ? data : data.path("content");
+            if (arr.isArray()) {
+                for (JsonNode r : arr) {
+                    if (name.equals(r.path("name").asText())) {
+                        return r.path("id").asLong();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("查询通知接收人失败: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean noticeRuleExists(String name) {
+        try {
+            JsonNode root = authedGet(base() + "/api/notice/rules");
+            JsonNode data = root.path("data");
+            JsonNode arr = data.isArray() ? data : data.path("content");
+            if (arr.isArray()) {
+                for (JsonNode r : arr) {
+                    if (name.equals(r.path("name").asText())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("查询告警策略失败: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    private java.util.Set<String> listAlertDefineNames() {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        try {
+            JsonNode root = authedGet(base() + "/api/alert/defines?pageIndex=0&pageSize=200");
+            JsonNode content = root.path("data").path("content");
+            if (content.isArray()) {
+                for (JsonNode d : content) {
+                    names.add(d.path("name").asText());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("查询告警规则列表失败: {}", e.getMessage());
+        }
+        return names;
+    }
+
+    private void createDefineIfAbsent(java.util.Set<String> existing, String name, String type,
+                                      String expr, String severity, String summary, String template) {
+        if (existing.contains(name)) {
+            return;
+        }
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("name", name);
+        body.put("type", type);
+        body.put("expr", expr);
+        body.put("period", 0);
+        body.put("times", 1);
+        ObjectNode labels = objectMapper.createObjectNode();
+        labels.put("severity", severity);
+        body.set("labels", labels);
+        ObjectNode annotations = objectMapper.createObjectNode();
+        annotations.put("summary", summary);
+        body.set("annotations", annotations);
+        body.put("template", template);
+        body.put("datasource", "realtime");
+        body.put("enable", true);
+        try {
+            JsonNode resp = authedPost(base() + "/api/alert/define", body);
+            checkCode(resp, "创建默认告警规则[" + name + "]");
+            log.info("已创建默认告警规则: {}", name);
+        } catch (Exception e) {
+            log.warn("创建默认告警规则[{}]失败: {}", name, e.getMessage());
+        }
     }
 
     /**

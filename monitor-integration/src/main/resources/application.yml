@@ -61,6 +61,14 @@ integration:
   webhook-token: ${WEBHOOK_TOKEN:change-me}
   detail-base-url: ${DETAIL_BASE_URL:http://localhost:1157}
   renotify-interval-seconds: 600
+  # 管理 API 鉴权 Key（请求头 X-Api-Key）。生产务必配置；为空则不鉴权
+  api-key: ${API_KEY:}
+  # OpenAPI 拉取 host 白名单（逗号分隔），为空不限 host（仍拦截环回/内网保留地址）
+  openapi-allowed-hosts: ${OPENAPI_ALLOWED_HOSTS:}
+  # 是否允许拉取私网地址的 OpenAPI 文档（默认 false 防 SSRF）
+  openapi-allow-private-network: ${OPENAPI_ALLOW_PRIVATE:false}
+  # 本服务 webhook 可达地址；配置后导入时自动在 HertzBeat 建 webhook 接收人+全量转发策略
+  self-webhook-url: ${SELF_WEBHOOK_URL:}
 
 logging:
   level:

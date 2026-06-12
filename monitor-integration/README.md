@@ -43,7 +43,16 @@ curl -X POST http://localhost:8080/api/v1/service-owners -H 'Content-Type: appli
   -d '{"serviceName":"order-service","wecomUserids":"zhangsan,lisi","emailList":"ops@company.com"}'
 ```
 
-> 后续阶段（6）：一体化 docker-compose 联调、单元测试、自检清单。
+### 安全与自动化（安全加固）
+
+- **管理 API 鉴权**：`/api/v1/**`（除 `/webhook/**`）需 `X-Api-Key`；健康检查/Swagger 放行；未配置 `API_KEY` 启动告警。
+- **Webhook 鉴权**：fail-closed，支持 `Authorization: Bearer`（HertzBeat 原生）或 `X-Webhook-Token`。
+- **SSRF 防护**：`import-openapi` 的 `openapiUrl` 拉取拦截环回/链路本地(含 169.254.169.254)/私网地址，支持白名单。
+- **导入自动打通"立即通知"**：正式导入时自动在 HertzBeat 创建默认告警规则（不可访问/返回错误码/响应慢）；
+  配置 `SELF_WEBHOOK_URL` 后自动创建 webhook 接收人 + 全量转发策略，无需手工配置即可端到端告警。
+- **导入原子性**：本地登记失败时回滚已创建的 HertzBeat 监控；按名回查用 search+分页精确匹配。
+
+> 阶段 6 已完成：一体化 docker-compose、单元测试、自检清单（见 `deploy/README.md`）。
 
 ## 本地运行
 
@@ -69,7 +78,11 @@ java -jar target/monitor-integration.jar
 | `HERTZBEAT_BASE_URL` / `HERTZBEAT_USERNAME` / `HERTZBEAT_PASSWORD` | HertzBeat 连接 | localhost:1157 / admin / hertzbeat |
 | `WECOM_CORPID` / `WECOM_AGENTID` / `WECOM_SECRET` / `WECOM_DEFAULT_USERIDS` | 企业微信自建应用（精准@人） | 空 |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | 邮件 SMTP | 空 |
-| `WEBHOOK_TOKEN` | HertzBeat 告警 Webhook 校验密钥 | change-me |
+| `WEBHOOK_TOKEN` | HertzBeat 告警 Webhook 校验密钥（经 `Authorization: Bearer` 或 `X-Webhook-Token`，fail-closed） | change-me |
+| `API_KEY` | 管理 API 鉴权 Key（请求头 `X-Api-Key`）；为空则不鉴权（仅内网/测试） | 空 |
+| `SELF_WEBHOOK_URL` | 本服务 webhook 可达地址；配置后导入自动建 HertzBeat 接收人+转发策略 | 空 |
+| `OPENAPI_ALLOWED_HOSTS` / `OPENAPI_ALLOW_PRIVATE` | OpenAPI 拉取白名单/是否允许私网（防 SSRF） | 空 / false |
+| `HZB_JWT_SECRET` | （HertzBeat 侧）JWT 密钥，生产必改 | - |
 
 ## 验证
 

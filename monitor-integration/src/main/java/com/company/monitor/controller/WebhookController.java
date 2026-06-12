@@ -29,11 +29,24 @@ public class WebhookController {
     @Operation(summary = "接收 HertzBeat 告警 Webhook（GroupAlert）")
     @PostMapping("/hertzbeat")
     public ResponseEntity<Result<Map<String, Object>>> hertzbeat(
-            @RequestHeader(value = "X-Webhook-Token", required = false) String token,
+            @RequestHeader(value = "X-Webhook-Token", required = false) String headerToken,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody JsonNode payload) {
-        // 鉴权：校验共享密钥，避免被伪造调用
-        if (properties.getWebhookToken() != null && !properties.getWebhookToken().isBlank()
-                && !properties.getWebhookToken().equals(token)) {
+        // token 兼容两种来源：自定义头 X-Webhook-Token，或 HertzBeat webhook 的 Authorization: Bearer
+        String token = headerToken;
+        if ((token == null || token.isBlank()) && authorization != null
+                && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            token = authorization.substring(7).trim();
+        }
+        // 鉴权：必须配置非空 token 且请求头匹配（fail-closed，防伪造调用）
+        String serverToken = properties.getWebhookToken();
+        if (serverToken == null || serverToken.isBlank()) {
+            log.error("integration.webhook-token 未配置，拒绝 Webhook 请求（请配置 WEBHOOK_TOKEN）");
+            return ResponseEntity.status(401).body(Result.error(401, "webhook token not configured"));
+        }
+        if (token == null || !java.security.MessageDigest.isEqual(
+                serverToken.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                token.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
             log.warn("Webhook token 校验失败");
             return ResponseEntity.status(401).body(Result.error(401, "invalid token"));
         }

@@ -72,10 +72,8 @@ sureness:
     - basic
     - jwt
   jwt:
-    secret: 'CyaFv0bwq2Eik0jdrKUtsA6bx3sDJeFV643R
-             LnfKefTjsIfJLBa2YkhEqEGtcHDTNe4CU6+9
-             8tVt4bisXQ13rbN0oxhUZR73M6EByXIO+SV5
-             dKhaX0csgOCTlCxq20yhmUea6H6JIpSE2Rwp'
+    # 安全：务必通过环境变量 HZB_JWT_SECRET 覆盖默认值（默认值为官方公开示例，可被伪造 JWT）
+    secret: ${HZB_JWT_SECRET:'CyaFv0bwq2Eik0jdrKUtsA6bx3sDJeFV643RLnfKefTjsIfJLBa2YkhEqEGtcHDTNe4CU6+98tVt4bisXQ13rbN0oxhUZR73M6EByXIO+SV5dKhaX0csgOCTlCxq20yhmUea6H6JIpSE2Rwp'}
 
 ---
 spring:

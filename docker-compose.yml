@@ -67,6 +67,8 @@ services:
     environment:
       LANG: zh_CN.UTF-8
       TZ: Asia/Shanghai
+      # 安全：务必修改为自有随机值（覆盖官方公开默认 JWT 密钥）
+      HZB_JWT_SECRET: ${HZB_JWT_SECRET:-please-change-this-to-a-long-random-secret}
     volumes:
       - ./deploy/hertzbeat/conf/application.yml:/opt/hertzbeat/config/application.yml
       - ./deploy/hertzbeat/ext-lib:/opt/hertzbeat/ext-lib
@@ -99,6 +101,12 @@ services:
       HERTZBEAT_PASSWORD: ${HERTZBEAT_PASSWORD:-hertzbeat}
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-change-me}
       DETAIL_BASE_URL: ${DETAIL_BASE_URL:-http://localhost:1157}
+      # 本服务 webhook 可达地址（容器内用服务名），导入时自动在 HertzBeat 建转发策略，打通立即通知
+      SELF_WEBHOOK_URL: ${SELF_WEBHOOK_URL:-http://monitor-integration:8080/api/v1/webhook/hertzbeat}
+      # 管理 API 鉴权 Key（X-Api-Key），生产务必配置
+      API_KEY: ${API_KEY:-}
+      OPENAPI_ALLOWED_HOSTS: ${OPENAPI_ALLOWED_HOSTS:-}
+      OPENAPI_ALLOW_PRIVATE: ${OPENAPI_ALLOW_PRIVATE:-false}
       # 企业微信自建应用（精准@人），不配置则跳过企业微信通知
       WECOM_CORPID: ${WECOM_CORPID:-}
       WECOM_AGENTID: ${WECOM_AGENTID:-}
