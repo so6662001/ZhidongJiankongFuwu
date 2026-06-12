@@ -65,4 +65,10 @@ public class IntegrationProperties {
      * 配置后按周期上报；外部看门狗在超时未收到心跳时独立告警（避免"监控系统挂了没人知道"）。
      */
     private String heartbeatUrl;
+
+    /**
+     * 安全严格模式：开启后，若未配置 api-key（且未配 SSO 头）或 webhook-token 为默认/空，则拒绝启动。
+     * 生产建议开启。
+     */
+    private boolean securityStrict = false;
 }

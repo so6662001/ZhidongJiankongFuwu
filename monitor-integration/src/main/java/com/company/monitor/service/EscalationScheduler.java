@@ -6,6 +6,7 @@ import com.company.monitor.entity.Alert;
 import com.company.monitor.mapper.AlertMapper;
 import com.company.monitor.notify.NotificationGateway;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -33,6 +34,7 @@ public class EscalationScheduler {
     }
 
     @Scheduled(fixedDelayString = "${integration.escalate-scan-interval-ms:60000}")
+    @SchedulerLock(name = "escalation-scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
     public void scan() {
         long after = properties.getEscalateAfterSeconds();
         if (after <= 0) {

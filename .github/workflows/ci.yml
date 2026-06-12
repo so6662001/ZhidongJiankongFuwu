@@ -41,3 +41,18 @@ jobs:
       - name: 构建
         working-directory: frontend
         run: npm run build
+
+  security-scan:
+    name: 依赖漏洞扫描 (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy 文件系统扫描（依赖/配置）
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'   # 先不阻断流水线，逐步收敛后可改为 '1'
+          format: table

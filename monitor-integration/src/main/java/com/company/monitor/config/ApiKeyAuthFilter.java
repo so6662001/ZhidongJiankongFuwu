@@ -36,11 +36,16 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        // 仅拦截 /api/v1 管理接口；Webhook 走自己的 token 校验
+        // Webhook 走自己的 token 校验，放行本过滤器
         if (uri.startsWith("/api/v1/webhook/")) {
             return true;
         }
-        return !uri.startsWith("/api/v1/");
+        // 健康检查放行（供探针/HertzBeat 监控）；其余 actuator 端点（prometheus/metrics）需鉴权
+        if (uri.equals("/actuator/health") || uri.startsWith("/actuator/health/") || uri.equals("/health")) {
+            return true;
+        }
+        // 拦截管理 API 与受保护的 actuator 指标端点
+        return !(uri.startsWith("/api/v1/") || uri.startsWith("/actuator/"));
     }
 
     @Override

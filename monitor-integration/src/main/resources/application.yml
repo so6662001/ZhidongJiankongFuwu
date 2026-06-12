@@ -96,6 +96,11 @@ integration:
   escalate-email-list: ${ESCALATE_EMAIL_LIST:}
   # SSO 网关可信身份头（如 X-Auth-User）；配置后携带该头即视为已认证
   sso-trusted-header: ${SSO_TRUSTED_HEADER:}
+  # Dead Man's Switch 心跳上报地址与间隔
+  heartbeat-url: ${HEARTBEAT_URL:}
+  heartbeat-interval-ms: ${HEARTBEAT_INTERVAL_MS:60000}
+  # 安全严格模式：开启则缺少鉴权/弱 token 时拒绝启动（生产建议 true）
+  security-strict: ${SECURITY_STRICT:false}
 
 logging:
   level:

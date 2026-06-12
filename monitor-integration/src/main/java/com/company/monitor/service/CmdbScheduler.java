@@ -2,6 +2,7 @@ package com.company.monitor.service;
 
 import com.company.monitor.config.CmdbProperties;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,7 @@ public class CmdbScheduler {
     }
 
     @Scheduled(fixedDelayString = "${cmdb.sync-interval-ms:3600000}", initialDelay = 30000)
+    @SchedulerLock(name = "cmdb-sync", lockAtMostFor = "PT10M", lockAtLeastFor = "PT10S")
     public void sync() {
         if (!properties.isScheduledEnabled() || properties.getUrl() == null || properties.getUrl().isBlank()) {
             return;

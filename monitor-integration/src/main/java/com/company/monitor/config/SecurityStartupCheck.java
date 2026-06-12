@@ -19,12 +19,20 @@ public class SecurityStartupCheck {
 
     @PostConstruct
     public void check() {
-        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-            log.warn("[安全提醒] 未配置 integration.api-key(API_KEY)，管理 API 处于无鉴权状态，生产环境请务必配置！");
+        boolean noApiAuth = (properties.getApiKey() == null || properties.getApiKey().isBlank())
+                && (properties.getSsoTrustedHeader() == null || properties.getSsoTrustedHeader().isBlank());
+        boolean weakWebhook = properties.getWebhookToken() == null || properties.getWebhookToken().isBlank()
+                || "change-me".equals(properties.getWebhookToken());
+
+        if (noApiAuth) {
+            log.warn("[安全提醒] 未配置 API_KEY 且未配置 SSO 头，管理 API 处于无鉴权状态，生产环境请务必配置！");
         }
-        if (properties.getWebhookToken() == null || properties.getWebhookToken().isBlank()
-                || "change-me".equals(properties.getWebhookToken())) {
-            log.warn("[安全提醒] integration.webhook-token 使用默认/空值，请修改 WEBHOOK_TOKEN！");
+        if (weakWebhook) {
+            log.warn("[安全提醒] WEBHOOK_TOKEN 使用默认/空值，请修改！");
+        }
+        if (properties.isSecurityStrict() && (noApiAuth || weakWebhook)) {
+            throw new IllegalStateException(
+                    "安全严格模式(integration.security-strict=true)下拒绝启动：请配置 API_KEY/SSO 头，并将 WEBHOOK_TOKEN 改为非默认强随机值。");
         }
     }
 }

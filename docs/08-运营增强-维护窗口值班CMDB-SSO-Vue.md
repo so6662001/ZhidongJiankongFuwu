@@ -58,10 +58,23 @@
 
 `.github/workflows/ci.yml`：push/PR 触发，后端 `mvn test`（跳过前端构建以加速）+ 打包，前端 `npm ci && npm run build`。
 
-## 9. 相关环境变量
+## 9. 安全/可靠性加固（代码审计整改）
+
+- **依赖升级**：Spring Boot 升级至 3.3.13、springdoc 2.6.0；CI 增加 **Trivy** 依赖/配置漏洞扫描；前端构建改用 `npm ci`。
+- **actuator 加固**：`/actuator/health` 放行（探针），`/actuator/prometheus`、`/metrics` 等需 `X-Api-Key`。
+- **安全严格模式**：`SECURITY_STRICT=true` 时，缺少 API_KEY/SSO 头或 webhook-token 为默认/空 → 拒绝启动。
+- **fingerprint 稳定化**：优先用 HertzBeat 原生 `fingerprint`，否则用稳定标签子集(defineid/alertname/instance/instancename)计算，避免易变指标值标签导致 firing/resolved 关联失败。
+- **并发去重**：按 fingerprint 条带锁串行处理，避免并发产生重复 firing。
+- **多副本就绪（ShedLock）**：升级扫描、CMDB 同步用分布式锁，多实例只有一个执行（表 `shedlock`，Flyway V5）。
+- **事务取舍**：通知/导入涉及外部 HTTP 调用，刻意不包裹长事务（避免占用连接）；落库失败处用补偿（如 Provision 回滚 HertzBeat 监控）。
+
+## 10. 相关环境变量
 
 | 变量 | 说明 |
 | --- | --- |
 | `API_KEY` | 管理 API X-Api-Key |
 | `SSO_TRUSTED_HEADER` | SSO 网关可信身份头名（如 X-Auth-User）|
 | `NOTIFY_MODE` / `ESCALATE_*` | 见 docs/07 |
+| `SECURITY_STRICT` | 安全严格模式（true 时弱鉴权拒绝启动）|
+| `HEARTBEAT_URL` / `HEARTBEAT_INTERVAL_MS` | Dead Man's Switch 心跳 |
+| `cmdb.scheduled-enabled` / `cmdb.sync-interval-ms` | CMDB 定时同步 |

@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.5</version>
+        <version>3.3.13</version>
         <relativePath/>
     </parent>
 
@@ -23,8 +23,9 @@
         <okhttp.version>4.12.0</okhttp.version>
         <jsonpath.version>2.9.0</jsonpath.version>
         <swagger-parser.version>2.1.22</swagger-parser.version>
-        <springdoc.version>2.5.0</springdoc.version>
+        <springdoc.version>2.6.0</springdoc.version>
         <hutool.version>5.8.27</hutool.version>
+        <shedlock.version>5.13.0</shedlock.version>
         <skip.frontend>false</skip.frontend>
     </properties>
 
@@ -94,6 +95,18 @@
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
         </dependency>
+
+        <!-- ShedLock：多副本下保证定时任务（升级/CMDB同步）只在一个实例执行 -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -154,7 +167,7 @@
                         <id>npm-install</id>
                         <goals><goal>npm</goal></goals>
                         <phase>generate-resources</phase>
-                        <configuration><arguments>install</arguments></configuration>
+                        <configuration><arguments>ci</arguments></configuration>
                     </execution>
                     <execution>
                         <id>npm-build</id>

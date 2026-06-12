@@ -86,8 +86,23 @@ public class AlertService {
         boolean recovered = "resolved".equalsIgnoreCase(groupStatus)
                 || (a.hasNonNull("endAt") && !a.path("endAt").asText().isBlank());
 
-        String fingerprint = computeFingerprint(labels, alertName);
+        // 优先用 HertzBeat 原生 fingerprint（如自定义模板已输出）；否则用稳定标签子集计算
+        String fingerprint = a.hasNonNull("fingerprint") && !a.path("fingerprint").asText().isBlank()
+                ? a.path("fingerprint").asText()
+                : computeFingerprint(labels, alertName);
 
+        // 同一 fingerprint 串行处理，避免并发产生重复 firing 行（单实例去重；多实例由调用方/DB 保证）
+        java.util.concurrent.locks.Lock lock = lockFor(fingerprint);
+        lock.lock();
+        try {
+            doHandleSingle(a, labels, monitorName, content, triggerTimes, recovered, fingerprint, commonSeverity);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void doHandleSingle(JsonNode a, Map<String, String> labels, String monitorName, String content,
+                                int triggerTimes, boolean recovered, String fingerprint, String commonSeverity) {
         // 关联本地登记的监控项，补充业务字段
         MonitorRef ref = monitorName != null ? findRefByName(monitorName) : null;
 
@@ -188,13 +203,35 @@ public class AlertService {
                 .eq("name", name).last("limit 1"));
     }
 
+    // 仅用「稳定标签」计算指纹，避免把易变的指标值标签纳入导致 firing/resolved 关联不上
+    private static final String[] STABLE_LABEL_KEYS = {"defineid", "alertname", "instance", "instancename", "monitor_id"};
+
     private String computeFingerprint(Map<String, String> labels, String alertName) {
-        TreeMap<String, String> sorted = new TreeMap<>(labels);
-        StringBuilder sb = new StringBuilder(alertName).append('|');
-        for (Map.Entry<String, String> e : sorted.entrySet()) {
-            sb.append(e.getKey()).append('=').append(e.getValue()).append(';');
+        StringBuilder sb = new StringBuilder(alertName == null ? "" : alertName).append('|');
+        boolean any = false;
+        for (String k : STABLE_LABEL_KEYS) {
+            String v = labels.get(k);
+            if (v != null) {
+                sb.append(k).append('=').append(v).append(';');
+                any = true;
+            }
+        }
+        // 兜底：若稳定标签都缺失，退回全量标签（保持可用）
+        if (!any) {
+            for (Map.Entry<String, String> e : new TreeMap<>(labels).entrySet()) {
+                sb.append(e.getKey()).append('=').append(e.getValue()).append(';');
+            }
         }
         return md5(sb.toString());
+    }
+
+    // 按 fingerprint 分桶的可重入锁（条带锁，固定桶数限制内存）
+    private final java.util.concurrent.ConcurrentMap<Integer, java.util.concurrent.locks.ReentrantLock> lockStripes
+            = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private java.util.concurrent.locks.Lock lockFor(String fingerprint) {
+        int stripe = Math.floorMod(fingerprint.hashCode(), 64);
+        return lockStripes.computeIfAbsent(stripe, k -> new java.util.concurrent.locks.ReentrantLock());
     }
 
     private String md5(String s) {
